@@ -3,97 +3,168 @@ import './App.css'
 import { DataChart } from './DataChart'
 import { sendToWebhook } from './webhook'
 
-/* ── constants ── */
+/* ─── constants ─── */
 const ANTECEDENTS = ['Attention presented','Attention removed','Stimulus added','Stimulus removed/altered','Demand presented','Demand removed','Transition','Denied access/told no','Routine change','Alone/unoccupied']
 const CONSEQUENCES = ['Positive attention','Negative attention','Redirection','Stimulus added','Demand/activity removed','Item/activity given','Item/activity removed','Ignored','Escape granted']
 const WHO_PRESENT  = ['Mom','Dad','Sibling','Teacher','Other caregiver','RBT only','Peer']
 const LOCATIONS    = ['Home','Community','Bathroom','Kitchen','Clinic','School','Vehicle']
 const NUM_GOALS    = 3
 
-/* ── helpers ── */
+/* ─── helpers ─── */
 function uid() { return Math.random().toString(36).slice(2,9) }
-
-function formatHMS(ms) {
-  const s = Math.floor(ms/1000)
-  return [Math.floor(s/3600), Math.floor((s%3600)/60), s%60].map(n=>String(n).padStart(2,'0')).join(':')
+function pad(n){ return String(n).padStart(2,'0') }
+function fmtHMS(ms){
+  const s=Math.floor(ms/1000)
+  return `${pad(Math.floor(s/3600))}:${pad(Math.floor((s%3600)/60))}:${pad(s%60)}`
 }
-function formatMS(ms) {
-  const s = Math.floor(ms/1000)
-  return `${String(Math.floor(s/60)).padStart(2,'0')}:${String(s%60).padStart(2,'0')}`
+function fmtMS(ms){
+  const s=Math.floor(ms/1000)
+  return `${pad(Math.floor(s/60))}:${pad(s%60)}`
 }
-function pctCorrect(data) {
-  if (!data.length) return 0
-  return Math.round((data.filter(d=>d.result==='correct').length / data.length)*10)/10*10
+function cumulativePct(trials){
+  let c=0; return trials.map((t,i)=>{ if(t.result==='correct') c++; return Math.round(c/(i+1)*1000)/10 })
 }
-function cumulativePct(data) {
-  let c=0; return data.map((d,i)=>{ if(d.result==='correct') c++; return Math.round(c/(i+1)*1000)/10 })
-}
-
-/* ── initial goal state ── */
-function initGoals() {
+function initGoals(){
   return Array.from({length:NUM_GOALS},()=>({id:uid(),name:'',phase:'Baseline',trials:[]}))
 }
 
+/* ─── circular timer ─── */
+function CircleTimer({ ms }) {
+  const s=Math.floor(ms/1000)
+  const h=Math.floor(s/3600), m=Math.floor((s%3600)/60), sec=s%60
+  const totalSec=s
+  // circle animates based on seconds within current minute
+  const pct = (sec/60)
+  const r=46, circ=2*Math.PI*r
+  const segments=[
+    {val:pad(h),lbl:'Hours',pct:h%12/12,color:'#6ea8e8'},
+    {val:pad(m),lbl:'Minutes',pct:m/60,color:'#5ab87a'},
+    {val:pad(sec),lbl:'Seconds',pct:sec/60,color:'#2f7d4f'},
+  ]
+  return (
+    <div style={{display:'flex',justifyContent:'center',gap:8,padding:'8px 0'}}>
+      {segments.map((seg,i)=>(
+        <div key={i} style={{display:'flex',flexDirection:'column',alignItems:'center',gap:4}}>
+          <div style={{position:'relative',width:56,height:56}}>
+            <svg width="56" height="56" style={{transform:'rotate(-90deg)'}}>
+              <circle cx="28" cy="28" r="22" fill="none" stroke="#e8eaec" strokeWidth="4"/>
+              <circle cx="28" cy="28" r="22" fill="none" stroke={seg.color} strokeWidth="4"
+                strokeDasharray={`${2*Math.PI*22}`}
+                strokeDashoffset={`${2*Math.PI*22*(1-seg.pct)}`}
+                strokeLinecap="round"/>
+            </svg>
+            <div style={{position:'absolute',inset:0,display:'flex',alignItems:'center',justifyContent:'center',
+              fontSize:13,fontWeight:700,fontVariantNumeric:'tabular-nums',color:seg.color}}>
+              {seg.val}
+            </div>
+          </div>
+          <span style={{fontSize:9,color:'var(--faint)',textTransform:'uppercase',letterSpacing:'0.04em'}}>{seg.lbl}</span>
+        </div>
+      ))}
+    </div>
+  )
+}
+
+/* ─── stacked digit timer ─── */
+function StackedTimer({ ms }) {
+  const s=Math.floor(ms/1000)
+  const segs=[{val:pad(Math.floor(s/3600)),lbl:'Hours'},{val:pad(Math.floor((s%3600)/60)),lbl:'Minutes'},{val:pad(s%60),lbl:'Seconds'}]
+  return (
+    <div className="timer-stacked">
+      {segs.map((seg,i)=>(
+        <span key={i} style={{display:'flex',alignItems:'flex-start',gap:0}}>
+          <span className="timer-seg">
+            <span className="timer-seg-digit">{seg.val}</span>
+            <span className="timer-seg-label">{seg.lbl}</span>
+          </span>
+          {i<segs.length-1 && <span className="timer-colon">:</span>}
+        </span>
+      ))}
+    </div>
+  )
+}
+
 export default function App() {
-  /* session timer */
-  const [sessionRunning, setSessionRunning] = useState(false)
-  const [sessionMs, setSessionMs]           = useState(0)
-  const sessRef = useRef(null)
+  /* ── session state ── */
+  const [sessionPhase, setSessionPhase] = useState('idle') // idle | running | paused | ended
+  const [sessionMs, setSessionMs]       = useState(0)
+  const sessRef = useRef({})
   useEffect(()=>{
-    if(sessionRunning){
-      sessRef.current = setInterval(()=>setSessionMs(Date.now()-sessRef._start),1000)
-      sessRef._start  = Date.now()-sessionMs
-    } else clearInterval(sessRef.current)
-    return ()=>clearInterval(sessRef.current)
-  },[sessionRunning])
+    if(sessionPhase==='running'){
+      sessRef.current._start = Date.now() - sessionMs
+      sessRef.current._iv = setInterval(()=>setSessionMs(Date.now()-sessRef.current._start),1000)
+    } else {
+      clearInterval(sessRef.current._iv)
+    }
+    return ()=>clearInterval(sessRef.current._iv)
+  },[sessionPhase])
 
-  /* goals / trials */
+  function handleStartPause(){
+    if(sessionPhase==='idle')    setSessionPhase('running')
+    else if(sessionPhase==='running') setSessionPhase('paused')
+    else if(sessionPhase==='paused')  setSessionPhase('running')
+  }
+  function handleRestart(){
+    setSessionPhase('idle')
+    setSessionMs(0)
+    setGoals(initGoals())
+    setFreqCount(0)
+    setDurEntries([])
+    setDurMs(0)
+    setDurRunning(false)
+    setIntSessions([])
+    setAbcEntries([])
+    setSessionNote('')
+    setSendStatus(null)
+    setErrors({})
+  }
+
+  /* ── goals / trials ── */
   const [goals,    setGoals]    = useState(initGoals)
-  const [activeId, setActiveId] = useState(goals[0].id)
-  const [flash,    setFlash]    = useState(null) // {id, result}
+  const [activeId, setActiveId] = useState(()=>initGoals()[0].id)
+  const [flash,    setFlash]    = useState(null)
+  const ag = goals.find(g=>g.id===activeId)
 
-  const activeGoal = goals.find(g=>g.id===activeId)
-
-  function updateGoalName(id,name) {
-    setGoals(prev=>prev.map(g=>g.id===id?{...g,name}:g))
+  function updateGoalName(id,name){
+    setGoals(p=>p.map(g=>g.id===id?{...g,name}:g))
+    setErrors(p=>({...p,[`g_${id}`]:''}))
   }
-  function logTrial(goalId, result) {
-    setGoals(prev=>prev.map(g=>g.id===goalId?{...g,trials:[...g.trials,{trial:g.trials.length+1,result}]}:g))
+  function logTrial(goalId,result){
+    setGoals(p=>p.map(g=>g.id===goalId?{...g,trials:[...g.trials,{trial:g.trials.length+1,result}]}:g))
     setFlash({id:goalId,result})
-    setTimeout(()=>setFlash(null),300)
+    setTimeout(()=>setFlash(null),250)
   }
 
-  /* dock: frequency Bx */
+  /* ── dock: freq ── */
   const [freqName,  setFreqName]  = useState('')
   const [freqCount, setFreqCount] = useState(0)
 
-  /* dock: duration Bx */
+  /* ── dock: duration ── */
   const [durName,    setDurName]    = useState('')
   const [durRunning, setDurRunning] = useState(false)
   const [durMs,      setDurMs]      = useState(0)
   const [durEntries, setDurEntries] = useState([])
-  const durRef = useRef(null)
+  const durRef = useRef({})
   useEffect(()=>{
     if(durRunning){
-      durRef._start = Date.now()
-      durRef.current = setInterval(()=>setDurMs(Date.now()-durRef._start),1000)
-    } else { clearInterval(durRef.current); setDurMs(0) }
-    return ()=>clearInterval(durRef.current)
+      durRef.current._start = Date.now()
+      durRef.current._iv = setInterval(()=>setDurMs(Date.now()-durRef.current._start),1000)
+    } else { clearInterval(durRef.current._iv); setDurMs(0) }
+    return ()=>clearInterval(durRef.current._iv)
   },[durRunning])
   function toggleDur(){
     if(durRunning){
-      setDurEntries(prev=>[...prev, Math.round((Date.now()-durRef._start)/100)/10])
+      setDurEntries(p=>[...p, Math.round((Date.now()-durRef.current._start)/100)/10])
       setDurRunning(false)
     } else setDurRunning(true)
   }
 
-  /* interval recording */
-  const [intMethod,  setIntMethod]  = useState('whole')
-  const [intBxName,  setIntBxName]  = useState('')
-  const [numInt,     setNumInt]      = useState(10)
-  const [intMarks,   setIntMarks]   = useState(Array(10).fill(false))
-  const [intSessions,setIntSessions]= useState([])
-
+  /* ── interval ── */
+  const [intMethod,   setIntMethod]   = useState('whole')
+  const [intBxName,   setIntBxName]   = useState('')
+  const [numInt,      setNumInt]       = useState(10)
+  const [intMarks,    setIntMarks]    = useState(Array(10).fill(false))
+  const [intSessions, setIntSessions] = useState([])
   function rebuildGrid(n){ setNumInt(n); setIntMarks(Array(n).fill(false)) }
   function toggleMark(i){ setIntMarks(p=>p.map((v,idx)=>idx===i?!v:v)) }
   function logIntSession(){
@@ -102,7 +173,7 @@ export default function App() {
     setIntMarks(Array(numInt).fill(false))
   }
 
-  /* ABC */
+  /* ── ABC ── */
   const [abcOpen,    setAbcOpen]    = useState(false)
   const [abcEntries, setAbcEntries] = useState([])
   const [abcDraft,   setAbcDraft]   = useState({antecedent:'',behavior:'',consequence:'',who:'',location:''})
@@ -114,25 +185,29 @@ export default function App() {
     setAbcOpen(false)
   }
 
-  /* session note */
+  /* ── Graph All modal ── */
+  const [graphModalOpen, setGraphModalOpen] = useState(false)
+
+  /* ── Session note + submit (shown after End Session) ── */
   const [sessionNote, setSessionNote] = useState('')
+  const [trainerEmail,setTrainerEmail]= useState('')
+  const [errors,      setErrors]      = useState({})
+  const [sending,     setSending]     = useState(false)
+  const [sendStatus,  setSendStatus]  = useState(null)
 
-  /* trainer email */
-  const [trainerEmail, setTrainerEmail] = useState('')
+  function handleEndSession(){
+    setSessionPhase('ended')
+    setGraphModalOpen(false)
+  }
 
-  /* validation */
-  const [errors,    setErrors]    = useState({})
-  const [sending,   setSending]   = useState(false)
-  const [sendStatus,setSendStatus]= useState(null)
-
-  function validate() {
+  function validate(){
     const e={}
-    if(!trainerEmail.trim())  e.trainerEmail = 'Trainer\'s email is required'
-    if(!freqName.trim())      e.freqName     = 'Frequency behavior name is required'
-    if(!durName.trim())       e.durName      = 'Duration behavior name is required'
-    if(!intBxName.trim())     e.intBxName    = 'Interval behavior name is required'
-    if(!sessionNote.trim())   e.sessionNote  = 'Session note is required'
-    goals.forEach(g=>{ if(!g.name.trim()) e[`goal_${g.id}`]='Goal name is required' })
+    if(!trainerEmail.trim())  e.trainerEmail='Required'
+    if(!freqName.trim())      e.freqName='Required'
+    if(!durName.trim())       e.durName='Required'
+    if(!intBxName.trim())     e.intBxName='Required'
+    if(!sessionNote.trim())   e.sessionNote='Required'
+    goals.forEach(g=>{ if(!g.name.trim()) e[`g_${g.id}`]='Required' })
     setErrors(e)
     return Object.keys(e).length===0
   }
@@ -146,146 +221,151 @@ export default function App() {
         sessionDurationSeconds: Math.round(sessionMs/1000),
         submittedAt: new Date().toISOString(),
         goals: goals.map(g=>({name:g.name,phase:g.phase,trials:g.trials})),
-        frequencyBehavior: {name:freqName, count:freqCount},
-        durationBehavior:  {name:durName,  entries:durEntries},
+        frequencyBehavior:{name:freqName,count:freqCount},
+        durationBehavior:{name:durName,entries:durEntries},
         intervalSessions,
         abcEntries,
         sessionNote,
       })
-      setSendStatus({ok:true, msg:'Session submitted successfully.'})
-    } catch(err) {
-      setSendStatus({ok:false, msg:err.message+' — check webhook is configured.'})
+      setSendStatus({ok:true,msg:'Session submitted successfully.'})
+    } catch(err){
+      setSendStatus({ok:false,msg:err.message+' — check webhook is configured.'})
     } finally { setSending(false) }
   }
 
-  /* right panel stats for active goal */
-  const ag = activeGoal
-  const agTrials = ag?.trials || []
+  /* right panel data */
+  const agTrials  = ag?.trials||[]
   const agCorrect = agTrials.filter(t=>t.result==='correct').length
-  const agPct = agTrials.length ? Math.round(agCorrect/agTrials.length*100) : '—'
+  const agPct     = agTrials.length ? Math.round(agCorrect/agTrials.length*100) : '—'
+
+  const startBtnLabel = sessionPhase==='idle' ? 'Start session'
+    : sessionPhase==='running' ? 'Pause session'
+    : sessionPhase==='paused'  ? 'Resume session'
+    : 'Session ended'
 
   return (
-    <div className="cr-app">
+    <div className="app">
 
-      {/* nav */}
-      <div className="cr-nav">
-        <div className="cr-nav-brand">Central<span>Reach</span></div>
-        <div className="cr-nav-right">
+      {/* TOP NAV */}
+      <div className="topnav">
+        <div className="topnav-brand"><span>Magnet</span> ABA</div>
+        <div className="topnav-right">
           <strong>{trainerEmail||'Trainer'}</strong>Magnet ABA
         </div>
       </div>
 
-      {/* session bar */}
-      <div className="cr-session-bar">
-        {/* CR-style stacked timer */}
-        <div className="cr-timer-block">
-          {formatHMS(sessionMs).split(':').map((seg,i,arr)=>(
-            <span key={i} style={{display:'flex',alignItems:'flex-start',gap:0}}>
-              <span className="cr-timer-col">
-                <span className={`cr-timer-digit${sessionRunning?' running':''}`}>{seg}</span>
-                <span className="cr-timer-label">{['Hours','Minutes','Seconds'][i]}</span>
-              </span>
-              {i<arr.length-1 && <span className="cr-timer-colon">:</span>}
-            </span>
-          ))}
-        </div>
+      {/* 3-COL BODY */}
+      <div className="body-wrap">
 
-        <div style={{flex:1,padding:'0 16px'}}>
-          <div style={{fontSize:15,fontWeight:700}}>Session</div>
-          <div style={{fontSize:11,color:'var(--cr-text-faint)'}}>
-            {sessionRunning?'In progress':sessionMs>0?'Paused':'Not started'}
+        {/* LEFT SIDEBAR */}
+        <div className="sidebar">
+          <div className="sidebar-top">
+            {/* restart */}
+            <button className="restart-btn" onClick={handleRestart}>
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/>
+                <path d="M3 3v5h5"/>
+              </svg>
+              Restart Session
+            </button>
+
+            {/* timer */}
+            {sessionPhase==='running'
+              ? <CircleTimer ms={sessionMs}/>
+              : <StackedTimer ms={sessionMs}/>
+            }
+
+            <button className="start-btn" onClick={handleStartPause} disabled={sessionPhase==='ended'}>
+              {startBtnLabel}
+            </button>
+            <button className="graph-all-btn" onClick={()=>setGraphModalOpen(true)}>
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/>
+              </svg>
+              Graph All
+            </button>
           </div>
-        </div>
 
-        <button className={`cr-session-btn ${sessionRunning?'pause':sessionMs>0?'resume':'start'}`}
-          onClick={()=>setSessionRunning(r=>!r)}>
-          {sessionRunning?'Pause session':sessionMs>0?'Resume session':'Start session'}
-        </button>
-        <button className="cr-session-btn save" onClick={handleSubmit} disabled={sending}>
-          {sending?'Sending…':'Save progress'}
-        </button>
-      </div>
-
-      {/* 3-col body */}
-      <div className="cr-body">
-
-        {/* LEFT sidebar */}
-        <div className="cr-sidebar">
-          <div className="cr-sidebar-section">
-            <div className="cr-sidebar-label">Goals</div>
+          {/* goal list */}
+          <div className="sidebar-section">
+            <div className="sidebar-sec-label">Goals</div>
             {goals.map(g=>(
-              <div key={g.id} className={`cr-sidebar-item${g.id===activeId?' active':''}`}
-                onClick={()=>setActiveId(g.id)}>
-                <span className="item-name">{g.name||'(unnamed goal)'}</span>
-                <span className="item-icon">⊕</span>
+              <div key={g.id} className={`sidebar-item${g.id===activeId?' active':''}`} onClick={()=>setActiveId(g.id)}>
+                <span className="si-name">{g.name||'(unnamed goal)'}</span>
+                <span className="si-dot">⊕</span>
               </div>
             ))}
           </div>
-          <div className="cr-sidebar-section">
-            <div className="cr-sidebar-label">Behaviors</div>
-            {freqName&&(
-              <div className="cr-sidebar-item">
-                <span className="item-name">{freqName}</span>
-                <span className="item-icon" style={{fontSize:8}}>freq</span>
-              </div>
-            )}
-            {durName&&(
-              <div className="cr-sidebar-item">
-                <span className="item-name">{durName}</span>
-                <span className="item-icon" style={{fontSize:8}}>dur</span>
-              </div>
-            )}
-            {!freqName&&!durName&&(
-              <div style={{padding:'6px 14px',fontSize:12,color:'var(--cr-text-faint)'}}>Enter behavior names in dock below</div>
-            )}
+
+          {/* behavior list */}
+          <div className="sidebar-section">
+            <div className="sidebar-sec-label">Behaviors</div>
+            {freqName
+              ? <div className="sidebar-item"><span className="si-name">{freqName}</span><span className="si-dot" style={{fontSize:8}}>frq</span></div>
+              : <div style={{padding:'4px 12px',fontSize:11,color:'var(--faint)'}}>Freq: enter in dock</div>
+            }
+            {durName
+              ? <div className="sidebar-item"><span className="si-name">{durName}</span><span className="si-dot" style={{fontSize:8}}>dur</span></div>
+              : <div style={{padding:'4px 12px',fontSize:11,color:'var(--faint)'}}>Dur: enter in dock</div>
+            }
           </div>
         </div>
 
         {/* CENTER */}
-        <div className="cr-center">
-          <div className="cr-view-label">NET View</div>
+        <div className="center">
+          <div className="view-label">NET View</div>
 
-          {/* trainer email */}
-          <div className="cr-section-card">
-            <div className="cr-section-card-header">Session info</div>
-            <div className="cr-section-card-body">
+          {/* trainer email — always visible and editable */}
+          <div className="sec-card">
+            <div className="sec-card-hdr">Session info</div>
+            <div className="sec-card-body">
               <div className="field" style={{marginBottom:0}}>
                 <label>Trainer's email *</label>
-                <input type="email" value={trainerEmail}
-                  onChange={e=>{setTrainerEmail(e.target.value);setErrors(p=>({...p,trainerEmail:''}))}}
+                <input
+                  type="email"
+                  value={trainerEmail}
+                  onChange={e=>{ setTrainerEmail(e.target.value); setErrors(p=>({...p,trainerEmail:''})) }}
                   placeholder="trainer@magnetaba.com"
-                  className={errors.trainerEmail?'invalid':''}/>
-                {errors.trainerEmail&&<div className="field-error">{errors.trainerEmail}</div>}
+                  className={errors.trainerEmail?'err':''}
+                  autoComplete="email"
+                />
+                {errors.trainerEmail&&<div className="field-err">{errors.trainerEmail}</div>}
               </div>
             </div>
           </div>
 
           {/* goal trial cards */}
           {goals.map(g=>(
-            <div key={g.id} className={`trial-card${g.id===activeId?' active-card':''}`}
-              onClick={()=>setActiveId(g.id)}>
-              <div className="trial-card-header">
-                <input className="goal-name-input" placeholder="Goal name"
+            <div key={g.id} className={`trial-card${g.id===activeId?' selected':''}`} onClick={()=>setActiveId(g.id)}>
+              <div className="trial-card-hdr">
+                <input
+                  className={`goal-input${errors[`g_${g.id}`]?' err':''}`}
+                  placeholder="Goal name"
                   value={g.name}
-                  onChange={e=>{updateGoalName(g.id,e.target.value);setErrors(p=>({...p,[`goal_${g.id}`]:''}))}}
-                  onClick={e=>e.stopPropagation()}/>
-                <span className="trial-phase">{g.phase}</span>
+                  onChange={e=>updateGoalName(g.id,e.target.value)}
+                  onClick={e=>e.stopPropagation()}
+                />
+                <span className="phase-tag">{g.phase}</span>
               </div>
-              {errors[`goal_${g.id}`]&&<div style={{padding:'4px 14px',fontSize:11,color:'var(--cr-red)'}}>{errors[`goal_${g.id}`]}</div>}
-              <div className="trial-card-body">
-                <div className="trial-counter">
-                  Trial {g.trials.length+1} / (No Max)
-                </div>
+              {errors[`g_${g.id}`]&&<div style={{padding:'3px 14px',fontSize:11,color:'var(--red)'}}>Goal name required</div>}
+              <div className="trial-body">
+                <div className="trial-counter">Trial {g.trials.length+1} / (No Max)</div>
                 <div className="trial-btns">
-                  <button className={`trial-btn correct${flash?.id===g.id&&flash.result==='correct'?' flash':''}`}
-                    onClick={e=>{e.stopPropagation();logTrial(g.id,'correct')}}>✓</button>
-                  <button className={`trial-btn incorrect${flash?.id===g.id&&flash.result==='incorrect'?' flash':''}`}
-                    onClick={e=>{e.stopPropagation();logTrial(g.id,'incorrect')}}>✕</button>
+                  <button
+                    className={`tbtn correct${flash?.id===g.id&&flash.result==='correct'?' flash-correct':''}`}
+                    onClick={e=>{e.stopPropagation();logTrial(g.id,'correct')}}>
+                    ✓
+                  </button>
+                  <button
+                    className={`tbtn incorrect${flash?.id===g.id&&flash.result==='incorrect'?' flash-incorrect':''}`}
+                    onClick={e=>{e.stopPropagation();logTrial(g.id,'incorrect')}}>
+                    ✕
+                  </button>
                 </div>
                 {g.trials.length>0&&(
-                  <div className="trial-history">
+                  <div className="trial-pips">
                     {g.trials.map((t,i)=>(
-                      <div key={i} className={`trial-pip ${t.result}`}>{t.result==='correct'?'✓':'✕'}</div>
+                      <div key={i} className={`pip ${t.result}`}>{t.result==='correct'?'✓':'✕'}</div>
                     ))}
                   </div>
                 )}
@@ -294,30 +374,30 @@ export default function App() {
           ))}
 
           {/* interval recording */}
-          <div className="cr-section-card">
-            <div className="cr-section-card-header">Interval recording (discontinuous)</div>
-            <div className="cr-section-card-body">
+          <div className="sec-card">
+            <div className="sec-card-hdr">Interval recording (discontinuous)</div>
+            <div className="sec-card-body">
               <div className="field">
                 <label>Behavior *</label>
                 <input value={intBxName}
                   onChange={e=>{setIntBxName(e.target.value);setErrors(p=>({...p,intBxName:''}))}}
                   placeholder="e.g. off-task"
-                  className={errors.intBxName?'invalid':''}/>
-                {errors.intBxName&&<div className="field-error">{errors.intBxName}</div>}
+                  className={errors.intBxName?'err':''}/>
+                {errors.intBxName&&<div className="field-err">Required</div>}
               </div>
               <div className="method-row">
                 <button className={`method-btn${intMethod==='whole'?' active':''}`} onClick={()=>setIntMethod('whole')}>Whole interval</button>
                 <button className={`method-btn${intMethod==='partial'?' active':''}`} onClick={()=>setIntMethod('partial')}>Partial interval</button>
               </div>
-              <div className="field" style={{marginBottom:10}}>
+              <div className="field" style={{marginBottom:12}}>
                 <label>Number of intervals</label>
                 <input type="number" min={2} max={30} value={numInt}
                   onChange={e=>rebuildGrid(Math.max(2,Math.min(30,parseInt(e.target.value)||10)))}
                   style={{width:80}}/>
               </div>
-              <div className="interval-grid">
+              <div className="int-grid">
                 {intMarks.map((v,i)=>(
-                  <button key={i} className={`interval-cell${v?' marked':''}`} onClick={()=>toggleMark(i)}>{i+1}</button>
+                  <button key={i} className={`int-cell${v?' marked':''}`} onClick={()=>toggleMark(i)}>{i+1}</button>
                 ))}
               </div>
               <button className="btn-primary" onClick={logIntSession}>Log interval session</button>
@@ -334,29 +414,14 @@ export default function App() {
             </div>
           </div>
 
-          {/* session note */}
-          <div className="cr-section-card">
-            <div className="cr-section-card-header">Session note</div>
-            <div className="cr-section-card-body">
-              <div className="field" style={{marginBottom:0}}>
-                <label>Narrative summary *</label>
-                <textarea rows={5} value={sessionNote}
-                  onChange={e=>{setSessionNote(e.target.value);setErrors(p=>({...p,sessionNote:''}))}}
-                  placeholder="Summarize session activities, client presentation, caregiver communication, and any notable events..."
-                  className={errors.sessionNote?'invalid':''}/>
-                {errors.sessionNote&&<div className="field-error">{errors.sessionNote}</div>}
-              </div>
-            </div>
-          </div>
-
-          {/* ABC entries display */}
+          {/* ABC entries log */}
           {abcEntries.length>0&&(
-            <div className="cr-section-card">
-              <div className="cr-section-card-header">ABC entries</div>
-              <div className="cr-section-card-body">
+            <div className="sec-card">
+              <div className="sec-card-hdr">ABC entries</div>
+              <div className="sec-card-body">
                 {abcEntries.map((e,i)=>(
-                  <div key={i} className="abc-entry-card">
-                    <div className="abc-row"><div className="abc-lbl" style={{color:'var(--cr-text-faint)'}}>Time</div><div className="abc-val">{e.time}</div></div>
+                  <div key={i} className="abc-entry" style={{marginBottom:i<abcEntries.length-1?10:0}}>
+                    <div className="abc-row"><div className="abc-lbl" style={{color:'var(--faint)'}}>Time</div><div className="abc-val">{e.time}</div></div>
                     <div className="abc-row abc-a"><div className="abc-lbl">A</div><div className="abc-val">{e.antecedent||'—'}</div></div>
                     <div className="abc-row abc-b"><div className="abc-lbl">B</div><div className="abc-val">{e.behavior}</div></div>
                     <div className="abc-row abc-c"><div className="abc-lbl">C</div><div className="abc-val">{e.consequence||'—'}</div></div>
@@ -366,19 +431,38 @@ export default function App() {
             </div>
           )}
 
-          {/* submit status */}
-          {sendStatus&&<div className={`status-msg${sendStatus.ok?' ok':' err'}`}>{sendStatus.msg}</div>}
+          {/* SESSION NOTE — only shown after End Session */}
+          {sessionPhase==='ended'&&(
+            <div className="sec-card" id="session-note-card">
+              <div className="sec-card-hdr">Session note</div>
+              <div className="sec-card-body">
+                <div className="field" style={{marginBottom:0}}>
+                  <label>Narrative summary *</label>
+                  <textarea rows={6} value={sessionNote}
+                    onChange={e=>{setSessionNote(e.target.value);setErrors(p=>({...p,sessionNote:''}))}}
+                    placeholder="Summarize session activities, client presentation, caregiver communication, and any notable events..."
+                    className={errors.sessionNote?'err':''}/>
+                  {errors.sessionNote&&<div className="field-err">Required</div>}
+                </div>
+              </div>
+              <div style={{padding:'0 14px 14px'}}>
+                {sendStatus&&<div className={`status-msg ${sendStatus.ok?'ok':'err'}`} style={{marginBottom:10}}>{sendStatus.msg}</div>}
+                <button className="btn-primary" onClick={handleSubmit} disabled={sending}>
+                  {sending?'Sending…':'Submit & email session'}
+                </button>
+              </div>
+            </div>
+          )}
         </div>
 
-        {/* RIGHT panel */}
-        <div className="cr-right">
-          <div className="cr-right-header">{ag?.name||'(select a goal)'}</div>
-
-          <div className="cr-right-section">
-            <div className="cr-right-section-title">% Correct — Last {agTrials.length} trials</div>
+        {/* RIGHT PANEL */}
+        <div className="right-panel">
+          <div className="rp-header">{ag?.name||'(select a goal)'}</div>
+          <div className="rp-section">
+            <div className="rp-sec-title">% Correct — Last {agTrials.length} trials</div>
             {agTrials.length===0
-              ? <div style={{fontSize:12,color:'var(--cr-text-faint)',textAlign:'center',padding:'20px 0'}}>No data to display</div>
-              : <div className="cr-chart-wrap">
+              ? <div style={{fontSize:12,color:'var(--faint)',textAlign:'center',padding:'20px 0'}}>No data to display</div>
+              : <div className="chart-wrap">
                   <DataChart type="line"
                     labels={agTrials.map((_,i)=>'T'+(i+1))}
                     values={cumulativePct(agTrials)}
@@ -386,19 +470,17 @@ export default function App() {
                 </div>
             }
           </div>
-
-          <div className="cr-right-section">
-            <div className="cr-right-section-title">Stats</div>
-            <div className="cr-stat-row"><span>Current phase</span><strong>{ag?.phase||'—'}</strong></div>
-            <div className="cr-stat-row"><span>Trials this session</span><strong>{agTrials.length}</strong></div>
-            <div className="cr-stat-row"><span>Correct</span><strong>{agCorrect}</strong></div>
-            <div className="cr-stat-row"><span>% correct</span><strong>{agPct}{agTrials.length?'%':''}</strong></div>
+          <div className="rp-section">
+            <div className="rp-sec-title">Stats</div>
+            <div className="stat-row"><span>Current phase</span><strong>{ag?.phase||'—'}</strong></div>
+            <div className="stat-row"><span>Trials this session</span><strong>{agTrials.length}</strong></div>
+            <div className="stat-row"><span>Correct</span><strong>{agCorrect}</strong></div>
+            <div className="stat-row"><span>% correct</span><strong>{agPct}{agTrials.length?'%':''}</strong></div>
           </div>
-
           {intSessions.length>0&&(
-            <div className="cr-right-section">
-              <div className="cr-right-section-title">Interval % graph</div>
-              <div className="cr-chart-wrap">
+            <div className="rp-section">
+              <div className="rp-sec-title">Interval % per session</div>
+              <div className="chart-wrap">
                 <DataChart type="line"
                   labels={intSessions.map((_,i)=>'S'+(i+1))}
                   values={intSessions.map(s=>Math.round(s.occurred/s.total*1000)/10)}
@@ -406,71 +488,55 @@ export default function App() {
               </div>
             </div>
           )}
-
           {durEntries.length>0&&(
-            <div className="cr-right-section">
-              <div className="cr-right-section-title">Duration per occurrence (sec)</div>
-              <div className="cr-chart-wrap">
+            <div className="rp-section">
+              <div className="rp-sec-title">Duration per occurrence (sec)</div>
+              <div className="chart-wrap">
                 <DataChart type="line"
                   labels={durEntries.map((_,i)=>'Occ '+(i+1))}
-                  values={durEntries}
-                  color="#2f7d4f"/>
+                  values={durEntries} color="#2f7d4f"/>
               </div>
             </div>
           )}
         </div>
       </div>
 
-      {/* BOTTOM DOCK */}
-      <div className="cr-dock">
-        {/* frequency Bx */}
-        <div className="dock-item">
-          <div className="dock-item-name">{freqName||<span style={{color:'var(--cr-text-faint)',fontWeight:400,fontSize:11}}>Enter name below</span>}</div>
-          <div className="dock-item-phase">Baseline</div>
+      {/* DOCK */}
+      <div className="dock">
+        {/* freq bx */}
+        <div className="dock-col">
+          <input className={`dock-name-input${errors.freqName?' err':''}`}
+            placeholder="Target behavior"
+            value={freqName}
+            onChange={e=>{setFreqName(e.target.value);setErrors(p=>({...p,freqName:''}))}}/>
+          <div className="dock-phase">Baseline</div>
           <div className="dock-controls">
-            <button className="dock-btn" onClick={()=>setFreqCount(c=>Math.max(0,c-1))}>−</button>
+            <button className="dock-stepper" onClick={()=>setFreqCount(c=>Math.max(0,c-1))}>−</button>
             <div className="dock-count">{freqCount}</div>
-            <button className="dock-btn" onClick={()=>setFreqCount(c=>c+1)}>+</button>
+            <button className="dock-stepper" onClick={()=>setFreqCount(c=>c+1)}>+</button>
           </div>
         </div>
-
-        {/* duration Bx */}
-        <div className="dock-item">
-          <div className="dock-item-name">{durName||<span style={{color:'var(--cr-text-faint)',fontWeight:400,fontSize:11}}>Enter name below</span>}</div>
-          <div className="dock-item-phase">Baseline</div>
+        {/* dur bx */}
+        <div className="dock-col">
+          <input className={`dock-name-input${errors.durName?' err':''}`}
+            placeholder="Target behavior"
+            value={durName}
+            onChange={e=>{setDurName(e.target.value);setErrors(p=>({...p,durName:''}))}}/>
+          <div className="dock-phase">Baseline</div>
           <div className="dock-controls">
-            <button className={`dock-play-btn${durRunning?' running':''}`} onClick={toggleDur}>{durRunning?'■':'▶'}</button>
-            <div className={`dock-timer${durRunning?' running':''}`}>{formatMS(durMs)}</div>
+            <button className={`dock-play${durRunning?' running':''}`} onClick={toggleDur}>{durRunning?'■':'▶'}</button>
+            <div className={`dock-timer${durRunning?' running':''}`}>{fmtMS(durMs)}</div>
           </div>
         </div>
-
-        {/* write-in names row — shown as small inputs underneath in a sub-row */}
-        <div style={{display:'flex',flexDirection:'column',justifyContent:'center',gap:4,padding:'0 12px',borderRight:'1px solid var(--cr-border)',minWidth:220}}>
-          <div style={{display:'flex',gap:8,alignItems:'center'}}>
-            <span style={{fontSize:10,color:'var(--cr-text-faint)',minWidth:30}}>Freq:</span>
-            <input value={freqName} onChange={e=>{setFreqName(e.target.value);setErrors(p=>({...p,freqName:''}))}}
-              placeholder="Target behavior"
-              style={{fontSize:12,border:'1px solid var(--cr-border)',borderRadius:4,padding:'3px 6px',flex:1,
-                      borderColor:errors.freqName?'var(--cr-red)':'var(--cr-border)'}}/>
-          </div>
-          <div style={{display:'flex',gap:8,alignItems:'center'}}>
-            <span style={{fontSize:10,color:'var(--cr-text-faint)',minWidth:30}}>Dur:</span>
-            <input value={durName} onChange={e=>{setDurName(e.target.value);setErrors(p=>({...p,durName:''}))}}
-              placeholder="Target behavior"
-              style={{fontSize:12,border:'1px solid var(--cr-border)',borderRadius:4,padding:'3px 6px',flex:1,
-                      borderColor:errors.durName?'var(--cr-red)':'var(--cr-border)'}}/>
-          </div>
-        </div>
-
         {/* ABC corner */}
-        <div className="dock-abc-corner">
+        <div className="dock-abc-col">
           <button className="dock-abc-btn" onClick={()=>setAbcOpen(true)}>ABC</button>
         </div>
       </div>
 
-      {/* ABC modal */}
+      {/* ABC MODAL */}
       {abcOpen&&(
-        <div className="abc-modal-overlay" onClick={()=>setAbcOpen(false)}>
+        <div className="abc-overlay" onClick={()=>setAbcOpen(false)}>
           <div className="abc-modal" onClick={e=>e.stopPropagation()}>
             <div className="abc-modal-title">ABC Collection</div>
             <div className="field">
@@ -481,9 +547,26 @@ export default function App() {
             <PickList title="Consequence" options={CONSEQUENCES} value={abcDraft.consequence} onPick={v=>toggleAbcField('consequence',v)}/>
             <PickList title="Who was present" options={WHO_PRESENT} value={abcDraft.who} onPick={v=>toggleAbcField('who',v)}/>
             <PickList title="Location" options={LOCATIONS} value={abcDraft.location} onPick={v=>toggleAbcField('location',v)}/>
-            <div style={{display:'flex',gap:8,marginTop:14}}>
-              <button className="btn-ghost" onClick={()=>setAbcOpen(false)}>Close</button>
-              <button className="btn-primary" onClick={submitAbc}>Submit</button>
+            <div className="abc-modal-btns">
+              <button className="btn-secondary" style={{flex:1}} onClick={()=>setAbcOpen(false)}>Close</button>
+              <button className="btn-primary" style={{flex:2}} onClick={submitAbc}>Submit</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* GRAPH ALL MODAL */}
+      {graphModalOpen&&(
+        <div className="modal-overlay" onClick={()=>setGraphModalOpen(false)}>
+          <div className="modal-box" onClick={e=>e.stopPropagation()}>
+            <div className="modal-title">Graph All</div>
+            <div className="modal-note">
+              Please be aware that graphing targets that have no data collected will be graphed as a zero (0).
+            </div>
+            <div className="modal-btns">
+              <button className="modal-btn-primary" onClick={()=>setGraphModalOpen(false)}>Graph All</button>
+              <button className="modal-btn-primary" onClick={handleEndSession}>Graph All and End Session</button>
+              <button className="modal-btn-close" onClick={()=>setGraphModalOpen(false)}>Close</button>
             </div>
           </div>
         </div>
@@ -496,9 +579,9 @@ function PickList({title,options,value,onPick}){
   return(
     <div className="field">
       <label>{title}</label>
-      <div className="pick-list">
-        {options.map(opt=>(
-          <div key={opt} className={`pick-list-item${value===opt?' selected':''}`} onClick={()=>onPick(opt)}>{opt}</div>
+      <div className="picklist">
+        {options.map(o=>(
+          <div key={o} className={`pick-item${value===o?' sel':''}`} onClick={()=>onPick(o)}>{o}</div>
         ))}
       </div>
     </div>
