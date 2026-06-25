@@ -3,81 +3,31 @@ import './App.css'
 import { DataChart } from './DataChart'
 import { sendToWebhook } from './webhook'
 
-/* ─── constants ─── */
 const ANTECEDENTS = ['Attention presented','Attention removed','Stimulus added','Stimulus removed/altered','Demand presented','Demand removed','Transition','Denied access/told no','Routine change','Alone/unoccupied']
 const CONSEQUENCES = ['Positive attention','Negative attention','Redirection','Stimulus added','Demand/activity removed','Item/activity given','Item/activity removed','Ignored','Escape granted']
 const WHO_PRESENT  = ['Mom','Dad','Sibling','Teacher','Other caregiver','RBT only','Peer']
 const LOCATIONS    = ['Home','Community','Bathroom','Kitchen','Clinic','School','Vehicle']
 const NUM_GOALS    = 3
 
-/* ─── helpers ─── */
 function uid() { return Math.random().toString(36).slice(2,9) }
 function pad(n){ return String(n).padStart(2,'0') }
-function fmtHMS(ms){
-  const s=Math.floor(ms/1000)
-  return `${pad(Math.floor(s/3600))}:${pad(Math.floor((s%3600)/60))}:${pad(s%60)}`
-}
-function fmtMS(ms){
-  const s=Math.floor(ms/1000)
-  return `${pad(Math.floor(s/60))}:${pad(s%60)}`
-}
-function cumulativePct(trials){
-  let c=0; return trials.map((t,i)=>{ if(t.result==='correct') c++; return Math.round(c/(i+1)*1000)/10 })
-}
-function initGoals(){
-  return Array.from({length:NUM_GOALS},()=>({id:uid(),name:'',phase:'Baseline',trials:[]}))
-}
+function fmtHMS(ms){ const s=Math.floor(ms/1000); return `${pad(Math.floor(s/3600))}:${pad(Math.floor((s%3600)/60))}:${pad(s%60)}` }
+function fmtMS(ms){ const s=Math.floor(ms/1000); return `${pad(Math.floor(s/60))}:${pad(s%60)}` }
+function cumulativePct(trials){ let c=0; return trials.map((t,i)=>{ if(t.result==='correct') c++; return Math.round(c/(i+1)*1000)/10 }) }
+function initGoals(){ return Array.from({length:NUM_GOALS},()=>({id:uid(),name:'',phase:'Baseline',trials:[]})) }
 
-/* ─── circular timer ─── */
-function CircleTimer({ ms }) {
-  const s=Math.floor(ms/1000)
-  const h=Math.floor(s/3600), m=Math.floor((s%3600)/60), sec=s%60
-  const totalSec=s
-  // circle animates based on seconds within current minute
-  const pct = (sec/60)
-  const r=46, circ=2*Math.PI*r
-  const segments=[
-    {val:pad(h),lbl:'Hours',pct:h%12/12,color:'#6ea8e8'},
-    {val:pad(m),lbl:'Minutes',pct:m/60,color:'#5ab87a'},
-    {val:pad(sec),lbl:'Seconds',pct:sec/60,color:'#2f7d4f'},
-  ]
-  return (
-    <div style={{display:'flex',justifyContent:'center',gap:8,padding:'8px 0'}}>
-      {segments.map((seg,i)=>(
-        <div key={i} style={{display:'flex',flexDirection:'column',alignItems:'center',gap:4}}>
-          <div style={{position:'relative',width:56,height:56}}>
-            <svg width="56" height="56" style={{transform:'rotate(-90deg)'}}>
-              <circle cx="28" cy="28" r="22" fill="none" stroke="#e8eaec" strokeWidth="4"/>
-              <circle cx="28" cy="28" r="22" fill="none" stroke={seg.color} strokeWidth="4"
-                strokeDasharray={`${2*Math.PI*22}`}
-                strokeDashoffset={`${2*Math.PI*22*(1-seg.pct)}`}
-                strokeLinecap="round"/>
-            </svg>
-            <div style={{position:'absolute',inset:0,display:'flex',alignItems:'center',justifyContent:'center',
-              fontSize:13,fontWeight:700,fontVariantNumeric:'tabular-nums',color:seg.color}}>
-              {seg.val}
-            </div>
-          </div>
-          <span style={{fontSize:9,color:'var(--faint)',textTransform:'uppercase',letterSpacing:'0.04em'}}>{seg.lbl}</span>
-        </div>
-      ))}
-    </div>
-  )
-}
-
-/* ─── stacked digit timer ─── */
-function StackedTimer({ ms }) {
+function StackedTimer({ ms, running }) {
   const s=Math.floor(ms/1000)
   const segs=[{val:pad(Math.floor(s/3600)),lbl:'Hours'},{val:pad(Math.floor((s%3600)/60)),lbl:'Minutes'},{val:pad(s%60),lbl:'Seconds'}]
   return (
     <div className="timer-stacked">
       {segs.map((seg,i)=>(
-        <span key={i} style={{display:'flex',alignItems:'flex-start',gap:0}}>
+        <span key={i} style={{display:'flex',alignItems:'flex-start'}}>
           <span className="timer-seg">
-            <span className="timer-seg-digit">{seg.val}</span>
+            <span className="timer-seg-digit" style={{color:running?'var(--green)':'var(--text)'}}>{seg.val}</span>
             <span className="timer-seg-label">{seg.lbl}</span>
           </span>
-          {i<segs.length-1 && <span className="timer-colon">:</span>}
+          {i<segs.length-1&&<span className="timer-colon">:</span>}
         </span>
       ))}
     </div>
@@ -85,153 +35,135 @@ function StackedTimer({ ms }) {
 }
 
 export default function App() {
-  /* ── session state ── */
-  const [sessionPhase, setSessionPhase] = useState('idle') // idle | running | paused | ended
-  const [sessionMs, setSessionMs]       = useState(0)
+  // session timer
+  const [sessionPhase, setSessionPhase] = useState('idle') // idle|running|paused|ended
+  const [sessionMs, setSessionMs] = useState(0)
   const sessRef = useRef({})
   useEffect(()=>{
     if(sessionPhase==='running'){
-      sessRef.current._start = Date.now() - sessionMs
+      sessRef.current._start = Date.now()-sessionMs
       sessRef.current._iv = setInterval(()=>setSessionMs(Date.now()-sessRef.current._start),1000)
-    } else {
-      clearInterval(sessRef.current._iv)
-    }
+    } else clearInterval(sessRef.current._iv)
     return ()=>clearInterval(sessRef.current._iv)
   },[sessionPhase])
 
   function handleStartPause(){
-    if(sessionPhase==='idle')    setSessionPhase('running')
+    if(sessionPhase==='idle') setSessionPhase('running')
     else if(sessionPhase==='running') setSessionPhase('paused')
-    else if(sessionPhase==='paused')  setSessionPhase('running')
+    else if(sessionPhase==='paused') setSessionPhase('running')
   }
   function handleRestart(){
-    setSessionPhase('idle')
-    setSessionMs(0)
-    setGoals(initGoals())
-    setFreqCount(0)
-    setDurEntries([])
-    setDurMs(0)
-    setDurRunning(false)
-    setIntSessions([])
+    setSessionPhase('idle'); setSessionMs(0)
+    setGoals(initGoals()); setActiveId(null)
+    setFreqName(''); setFreqCount(0)
+    setDurName(''); setDurEntries([]); setDurMs(0); setDurRunning(false)
+    setIntBxName(''); setIntSessions([]); setIntMarks(Array(10).fill(false))
     setAbcEntries([])
-    setSessionNote('')
-    setSendStatus(null)
-    setErrors({})
+    setSessionNote(''); setTrainerEmail('')
+    setErrors({}); setSendStatus(null)
+    setView('session')
   }
 
-  /* ── goals / trials ── */
-  const [goals,    setGoals]    = useState(initGoals)
-  const [activeId, setActiveId] = useState(()=>initGoals()[0].id)
-  const [flash,    setFlash]    = useState(null)
+  // goals
+  const [goals, setGoals] = useState(initGoals)
+  const [activeId, setActiveId] = useState(()=>initGoals()[0]?.id)
+  const [flash, setFlash] = useState(null)
   const ag = goals.find(g=>g.id===activeId)
 
-  function updateGoalName(id,name){
-    setGoals(p=>p.map(g=>g.id===id?{...g,name}:g))
-    setErrors(p=>({...p,[`g_${id}`]:''}))
-  }
+  function updateGoalName(id,name){ setGoals(p=>p.map(g=>g.id===id?{...g,name}:g)); setErrors(p=>({...p,[`g_${id}`]:''})) }
   function logTrial(goalId,result){
     setGoals(p=>p.map(g=>g.id===goalId?{...g,trials:[...g.trials,{trial:g.trials.length+1,result}]}:g))
-    setFlash({id:goalId,result})
-    setTimeout(()=>setFlash(null),250)
+    setFlash({id:goalId,result}); setTimeout(()=>setFlash(null),250)
   }
 
-  /* ── dock: freq ── */
-  const [freqName,  setFreqName]  = useState('')
+  // dock freq
+  const [freqName, setFreqName] = useState('')
   const [freqCount, setFreqCount] = useState(0)
 
-  /* ── dock: duration ── */
-  const [durName,    setDurName]    = useState('')
+  // dock duration
+  const [durName, setDurName] = useState('')
   const [durRunning, setDurRunning] = useState(false)
-  const [durMs,      setDurMs]      = useState(0)
+  const [durMs, setDurMs] = useState(0)
   const [durEntries, setDurEntries] = useState([])
   const durRef = useRef({})
   useEffect(()=>{
-    if(durRunning){
-      durRef.current._start = Date.now()
-      durRef.current._iv = setInterval(()=>setDurMs(Date.now()-durRef.current._start),1000)
-    } else { clearInterval(durRef.current._iv); setDurMs(0) }
+    if(durRunning){ durRef.current._start=Date.now(); durRef.current._iv=setInterval(()=>setDurMs(Date.now()-durRef.current._start),1000) }
+    else { clearInterval(durRef.current._iv); setDurMs(0) }
     return ()=>clearInterval(durRef.current._iv)
   },[durRunning])
-  function toggleDur(){
-    if(durRunning){
-      setDurEntries(p=>[...p, Math.round((Date.now()-durRef.current._start)/100)/10])
-      setDurRunning(false)
-    } else setDurRunning(true)
-  }
+  function toggleDur(){ if(durRunning){ setDurEntries(p=>[...p,Math.round((Date.now()-durRef.current._start)/100)/10]); setDurRunning(false) } else setDurRunning(true) }
 
-  /* ── interval ── */
-  const [intMethod,   setIntMethod]   = useState('whole')
-  const [intBxName,   setIntBxName]   = useState('')
-  const [numInt,      setNumInt]       = useState(10)
-  const [intMarks,    setIntMarks]    = useState(Array(10).fill(false))
+  // interval
+  const [intMethod, setIntMethod] = useState('whole')
+  const [intBxName, setIntBxName] = useState('')
+  const [numInt, setNumInt] = useState(10)
+  const [intMarks, setIntMarks] = useState(Array(10).fill(false))
   const [intSessions, setIntSessions] = useState([])
   function rebuildGrid(n){ setNumInt(n); setIntMarks(Array(n).fill(false)) }
   function toggleMark(i){ setIntMarks(p=>p.map((v,idx)=>idx===i?!v:v)) }
-  function logIntSession(){
-    const occurred=intMarks.filter(Boolean).length
-    setIntSessions(p=>[...p,{behavior:intBxName||'Untitled',method:intMethod,occurred,total:intMarks.length}])
-    setIntMarks(Array(numInt).fill(false))
-  }
+  function logIntSession(){ const o=intMarks.filter(Boolean).length; setIntSessions(p=>[...p,{behavior:intBxName||'Untitled',method:intMethod,occurred:o,total:intMarks.length}]); setIntMarks(Array(numInt).fill(false)) }
 
-  /* ── ABC ── */
-  const [abcOpen,    setAbcOpen]    = useState(false)
+  // ABC
+  const [abcOpen, setAbcOpen] = useState(false)
   const [abcEntries, setAbcEntries] = useState([])
-  const [abcDraft,   setAbcDraft]   = useState({antecedent:'',behavior:'',consequence:'',who:'',location:''})
+  const [abcDraft, setAbcDraft] = useState({antecedent:'',behavior:'',consequence:'',who:'',location:''})
   function toggleAbcField(f,v){ setAbcDraft(p=>({...p,[f]:p[f]===v?'':v})) }
-  function submitAbc(){
-    if(!abcDraft.behavior.trim()) return
-    setAbcEntries(p=>[...p,{...abcDraft,time:new Date().toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'})}])
-    setAbcDraft({antecedent:'',behavior:'',consequence:'',who:'',location:''})
-    setAbcOpen(false)
-  }
+  function submitAbc(){ if(!abcDraft.behavior.trim()) return; setAbcEntries(p=>[...p,{...abcDraft,time:new Date().toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'})}]); setAbcDraft({antecedent:'',behavior:'',consequence:'',who:'',location:''}); setAbcOpen(false) }
 
-  /* ── Graph All modal ── */
+  // graph all modal
   const [graphModalOpen, setGraphModalOpen] = useState(false)
 
-  /* ── Session note + submit (shown after End Session) ── */
+  // view: 'session' | 'submit'
+  const [view, setView] = useState('session')
   const [sessionNote, setSessionNote] = useState('')
-  const [trainerEmail,setTrainerEmail]= useState('')
-  const [errors,      setErrors]      = useState({})
-  const [sending,     setSending]     = useState(false)
-  const [sendStatus,  setSendStatus]  = useState(null)
-
-  function handleEndSession(){
-    setSessionPhase('ended')
-    setGraphModalOpen(false)
-  }
-
+  const [trainerEmail, setTrainerEmail] = useState('')
+  const [errors, setErrors] = useState({})
+  const [sending, setSending] = useState(false)
+  const [sendStatus, setSendStatus] = useState(null)
   const centerRef = useRef(null)
 
-  function validate(){
+  // validate fields that are required during session (goals + dock)
+  function validateSession(){
     const e={}
-    if(!trainerEmail.trim())  e.trainerEmail='Required'
-    if(!freqName.trim())      e.freqName='Required'
-    if(!durName.trim())       e.durName='Required'
-    if(!intBxName.trim())     e.intBxName='Required'
-    if(!sessionNote.trim())   e.sessionNote='Required'
+    if(!freqName.trim()) e.freqName='Required'
+    if(!durName.trim())  e.durName='Required'
+    if(!intBxName.trim()) e.intBxName='Required'
     goals.forEach(g=>{ if(!g.name.trim()) e[`g_${g.id}`]='Required' })
     setErrors(e)
     if(Object.keys(e).length>0){
-      // scroll center panel to top so errors are visible
       setTimeout(()=>{ if(centerRef.current) centerRef.current.scrollTop=0 },50)
     }
     return Object.keys(e).length===0
   }
 
+  // validate submit view fields
+  function validateSubmit(){
+    const e={}
+    if(!trainerEmail.trim()) e.trainerEmail='Required'
+    if(!sessionNote.trim())  e.sessionNote='Required'
+    setErrors(e)
+    return Object.keys(e).length===0
+  }
+
+  function handleGraphAllEndSession(){
+    setGraphModalOpen(false)
+    if(!validateSession()) return  // show red, stay on session view
+    setSessionPhase('ended')
+    setView('submit')
+    setTimeout(()=>{ if(centerRef.current) centerRef.current.scrollTop=0 },50)
+  }
+
   async function handleSubmit(){
-    if(!validate()) return
+    if(!validateSubmit()) return
     setSending(true); setSendStatus(null)
     try {
       await sendToWebhook({
-        trainerEmail,
-        sessionDurationSeconds: Math.round(sessionMs/1000),
-        submittedAt: new Date().toISOString(),
-        goals: goals.map(g=>({name:g.name,phase:g.phase,trials:g.trials})),
+        trainerEmail, sessionDurationSeconds:Math.round(sessionMs/1000),
+        submittedAt:new Date().toISOString(),
+        goals:goals.map(g=>({name:g.name,phase:g.phase,trials:g.trials})),
         frequencyBehavior:{name:freqName,count:freqCount},
         durationBehavior:{name:durName,entries:durEntries},
-        intervalSessions,
-        abcEntries,
-        sessionNote,
+        intervalSessions, abcEntries, sessionNote,
       })
       setSendStatus({ok:true,msg:'Session submitted successfully.'})
     } catch(err){
@@ -239,60 +171,37 @@ export default function App() {
     } finally { setSending(false) }
   }
 
-  /* right panel data */
   const agTrials  = ag?.trials||[]
   const agCorrect = agTrials.filter(t=>t.result==='correct').length
   const agPct     = agTrials.length ? Math.round(agCorrect/agTrials.length*100) : '—'
 
-  const startBtnLabel = sessionPhase==='idle' ? 'Start session'
-    : sessionPhase==='running' ? 'Pause session'
-    : sessionPhase==='paused'  ? 'Resume session'
-    : 'Session ended'
+  const startBtnLabel = sessionPhase==='idle'?'Start session':sessionPhase==='running'?'Pause session':sessionPhase==='paused'?'Resume session':'Session ended'
 
   return (
     <div className="app">
-
       {/* TOP NAV */}
       <div className="topnav">
         <div className="topnav-brand"><span>Magnet</span> ABA</div>
-        <div className="topnav-right">
-          <strong>{trainerEmail||'Trainer'}</strong>Magnet ABA
-        </div>
+        <div className="topnav-right"><strong>Trainer</strong>Magnet ABA</div>
       </div>
 
-      {/* 3-COL BODY */}
-      <div className="body-wrap">
+      {/* 3-COL COLUMNS */}
+      <div className="columns">
 
-        {/* LEFT SIDEBAR */}
+        {/* SIDEBAR */}
         <div className="sidebar">
           <div className="sidebar-top">
-            {/* restart */}
             <button className="restart-btn" onClick={handleRestart}>
-              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                <path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/>
-                <path d="M3 3v5h5"/>
-              </svg>
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/></svg>
               Restart Session
             </button>
-
-            {/* timer */}
-            {sessionPhase==='running'
-              ? <CircleTimer ms={sessionMs}/>
-              : <StackedTimer ms={sessionMs}/>
-            }
-
-            <button className="start-btn" onClick={handleStartPause} disabled={sessionPhase==='ended'}>
-              {startBtnLabel}
-            </button>
-            <button className="graph-all-btn" onClick={()=>setGraphModalOpen(true)}>
-              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                <polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/>
-              </svg>
+            <StackedTimer ms={sessionMs} running={sessionPhase==='running'}/>
+            <button className="sidebar-btn primary" onClick={handleStartPause} disabled={sessionPhase==='ended'}>{startBtnLabel}</button>
+            <button className="sidebar-btn secondary" onClick={()=>setGraphModalOpen(true)}>
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>
               Graph All
             </button>
           </div>
-
-          {/* goal list */}
           <div className="sidebar-section">
             <div className="sidebar-sec-label">Goals</div>
             {goals.map(g=>(
@@ -302,161 +211,128 @@ export default function App() {
               </div>
             ))}
           </div>
-
-          {/* behavior list */}
           <div className="sidebar-section">
             <div className="sidebar-sec-label">Behaviors</div>
-            {freqName
-              ? <div className="sidebar-item"><span className="si-name">{freqName}</span><span className="si-dot" style={{fontSize:8}}>frq</span></div>
-              : <div style={{padding:'4px 12px',fontSize:11,color:'var(--faint)'}}>Freq: enter in dock</div>
-            }
-            {durName
-              ? <div className="sidebar-item"><span className="si-name">{durName}</span><span className="si-dot" style={{fontSize:8}}>dur</span></div>
-              : <div style={{padding:'4px 12px',fontSize:11,color:'var(--faint)'}}>Dur: enter in dock</div>
-            }
+            {freqName ? <div className="sidebar-item"><span className="si-name">{freqName}</span><span className="si-dot" style={{fontSize:7}}>frq</span></div>
+              : <div style={{padding:'4px 12px',fontSize:11,color:'var(--faint)'}}>Freq: enter in dock</div>}
+            {durName ? <div className="sidebar-item"><span className="si-name">{durName}</span><span className="si-dot" style={{fontSize:7}}>dur</span></div>
+              : <div style={{padding:'4px 12px',fontSize:11,color:'var(--faint)'}}>Dur: enter in dock</div>}
           </div>
         </div>
 
         {/* CENTER */}
         <div className="center" ref={centerRef}>
-          <div className="view-label">NET View</div>
-
-          {/* trainer email — always visible and editable */}
-          <div className="sec-card">
-            <div className="sec-card-hdr">Session info</div>
-            <div className="sec-card-body">
-              <div className="field" style={{marginBottom:0}}>
-                <label>Trainer's email *</label>
-                <input
-                  type="email"
-                  value={trainerEmail}
-                  onChange={e=>{ setTrainerEmail(e.target.value); setErrors(p=>({...p,trainerEmail:''})) }}
-                  placeholder="trainer@magnetaba.com"
-                  className={errors.trainerEmail?'err':''}
-                  autoComplete="email"
-                />
-                {errors.trainerEmail&&<div className="field-err">{errors.trainerEmail}</div>}
-              </div>
-            </div>
-          </div>
-
-          {/* goal trial cards */}
-          {goals.map(g=>(
-            <div key={g.id} className={`trial-card${g.id===activeId?' selected':''}`} onClick={()=>setActiveId(g.id)}>
-              <div className="trial-card-hdr">
-                <input
-                  className={`goal-input${errors[`g_${g.id}`]?' err':''}`}
-                  placeholder="Goal name"
-                  value={g.name}
-                  onChange={e=>updateGoalName(g.id,e.target.value)}
-                  onClick={e=>e.stopPropagation()}
-                />
-                <span className="phase-tag">{g.phase}</span>
-              </div>
-              {errors[`g_${g.id}`]&&<div style={{padding:'3px 14px',fontSize:11,color:'var(--red)'}}>Goal name required</div>}
-              <div className="trial-body">
-                <div className="trial-counter">Trial {g.trials.length+1} / (No Max)</div>
-                <div className="trial-btns">
-                  <button
-                    className={`tbtn correct${flash?.id===g.id&&flash.result==='correct'?' flash-correct':''}`}
-                    onClick={e=>{e.stopPropagation();logTrial(g.id,'correct')}}>
-                    ✓
-                  </button>
-                  <button
-                    className={`tbtn incorrect${flash?.id===g.id&&flash.result==='incorrect'?' flash-incorrect':''}`}
-                    onClick={e=>{e.stopPropagation();logTrial(g.id,'incorrect')}}>
-                    ✕
-                  </button>
+          {view==='session' ? (
+            <>
+              <div className="view-label">NET View</div>
+              {goals.map(g=>(
+                <div key={g.id} className={`trial-card${g.id===activeId?' selected':''}${errors[`g_${g.id}`]?' err-card':''}`} onClick={()=>setActiveId(g.id)}>
+                  <div className="trial-card-hdr">
+                    <input className={`goal-input${errors[`g_${g.id}`]?' err':''}`} placeholder="Goal name *"
+                      value={g.name} onChange={e=>updateGoalName(g.id,e.target.value)} onClick={e=>e.stopPropagation()}/>
+                    <span className="phase-tag">{g.phase}</span>
+                  </div>
+                  {errors[`g_${g.id}`]&&<div style={{padding:'4px 14px',fontSize:11,color:'var(--red)',fontWeight:600}}>Goal name required</div>}
+                  <div className="trial-body">
+                    <div className="trial-counter">Trial {g.trials.length+1} / (No Max)</div>
+                    <div className="trial-btns">
+                      <button className={`tbtn correct${flash?.id===g.id&&flash.result==='correct'?' flash-correct':''}`}
+                        onClick={e=>{e.stopPropagation();logTrial(g.id,'correct')}}>✓</button>
+                      <button className={`tbtn incorrect${flash?.id===g.id&&flash.result==='incorrect'?' flash-incorrect':''}`}
+                        onClick={e=>{e.stopPropagation();logTrial(g.id,'incorrect')}}>✕</button>
+                    </div>
+                    {g.trials.length>0&&<div className="trial-pips">{g.trials.map((t,i)=><div key={i} className={`pip ${t.result}`}>{t.result==='correct'?'✓':'✕'}</div>)}</div>}
+                  </div>
                 </div>
-                {g.trials.length>0&&(
-                  <div className="trial-pips">
-                    {g.trials.map((t,i)=>(
-                      <div key={i} className={`pip ${t.result}`}>{t.result==='correct'?'✓':'✕'}</div>
+              ))}
+
+              <div className="sec-card">
+                <div className="sec-card-hdr">Interval recording (discontinuous)</div>
+                <div className="sec-card-body">
+                  <div className="field">
+                    <label>Behavior *</label>
+                    <input value={intBxName} onChange={e=>{setIntBxName(e.target.value);setErrors(p=>({...p,intBxName:''}))}}
+                      placeholder="e.g. off-task" className={errors.intBxName?'err':''}/>
+                    {errors.intBxName&&<div className="field-err">Required</div>}
+                  </div>
+                  <div className="method-row">
+                    <button className={`method-btn${intMethod==='whole'?' active':''}`} onClick={()=>setIntMethod('whole')}>Whole interval</button>
+                    <button className={`method-btn${intMethod==='partial'?' active':''}`} onClick={()=>setIntMethod('partial')}>Partial interval</button>
+                  </div>
+                  <div className="field" style={{marginBottom:12}}>
+                    <label>Number of intervals</label>
+                    <input type="number" min={2} max={30} value={numInt}
+                      onChange={e=>rebuildGrid(Math.max(2,Math.min(30,parseInt(e.target.value)||10)))} style={{width:80}}/>
+                  </div>
+                  <div className="int-grid">
+                    {intMarks.map((v,i)=><button key={i} className={`int-cell${v?' marked':''}`} onClick={()=>toggleMark(i)}>{i+1}</button>)}
+                  </div>
+                  <button className="btn-primary" onClick={logIntSession}>Log interval session</button>
+                  {intSessions.length>0&&(
+                    <div className="entry-list" style={{marginTop:12}}>
+                      {intSessions.map((s,i)=>(
+                        <div className="entry-row" key={i}>
+                          <div><div className="entry-main">{s.behavior}</div><div className="entry-sub">{s.method} interval</div></div>
+                          <div>{Math.round(s.occurred/s.total*100)}%</div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              {abcEntries.length>0&&(
+                <div className="sec-card">
+                  <div className="sec-card-hdr">ABC entries</div>
+                  <div className="sec-card-body">
+                    {abcEntries.map((e,i)=>(
+                      <div key={i} className="abc-entry" style={{marginBottom:i<abcEntries.length-1?10:0}}>
+                        <div className="abc-row"><div className="abc-lbl" style={{color:'var(--faint)'}}>Time</div><div className="abc-val">{e.time}</div></div>
+                        <div className="abc-row abc-a"><div className="abc-lbl">A</div><div className="abc-val">{e.antecedent||'—'}</div></div>
+                        <div className="abc-row abc-b"><div className="abc-lbl">B</div><div className="abc-val">{e.behavior}</div></div>
+                        <div className="abc-row abc-c"><div className="abc-lbl">C</div><div className="abc-val">{e.consequence||'—'}</div></div>
+                      </div>
                     ))}
                   </div>
-                )}
-              </div>
-            </div>
-          ))}
-
-          {/* interval recording */}
-          <div className="sec-card">
-            <div className="sec-card-hdr">Interval recording (discontinuous)</div>
-            <div className="sec-card-body">
-              <div className="field">
-                <label>Behavior *</label>
-                <input value={intBxName}
-                  onChange={e=>{setIntBxName(e.target.value);setErrors(p=>({...p,intBxName:''}))}}
-                  placeholder="e.g. off-task"
-                  className={errors.intBxName?'err':''}/>
-                {errors.intBxName&&<div className="field-err">Required</div>}
-              </div>
-              <div className="method-row">
-                <button className={`method-btn${intMethod==='whole'?' active':''}`} onClick={()=>setIntMethod('whole')}>Whole interval</button>
-                <button className={`method-btn${intMethod==='partial'?' active':''}`} onClick={()=>setIntMethod('partial')}>Partial interval</button>
-              </div>
-              <div className="field" style={{marginBottom:12}}>
-                <label>Number of intervals</label>
-                <input type="number" min={2} max={30} value={numInt}
-                  onChange={e=>rebuildGrid(Math.max(2,Math.min(30,parseInt(e.target.value)||10)))}
-                  style={{width:80}}/>
-              </div>
-              <div className="int-grid">
-                {intMarks.map((v,i)=>(
-                  <button key={i} className={`int-cell${v?' marked':''}`} onClick={()=>toggleMark(i)}>{i+1}</button>
-                ))}
-              </div>
-              <button className="btn-primary" onClick={logIntSession}>Log interval session</button>
-              {intSessions.length>0&&(
-                <div className="entry-list" style={{marginTop:12}}>
-                  {intSessions.map((s,i)=>(
-                    <div className="entry-row" key={i}>
-                      <div><div className="entry-main">{s.behavior}</div><div className="entry-sub">{s.method} interval</div></div>
-                      <div>{Math.round(s.occurred/s.total*100)}%</div>
-                    </div>
-                  ))}
                 </div>
               )}
-            </div>
-          </div>
-
-          {/* ABC entries log */}
-          {abcEntries.length>0&&(
-            <div className="sec-card">
-              <div className="sec-card-hdr">ABC entries</div>
-              <div className="sec-card-body">
-                {abcEntries.map((e,i)=>(
-                  <div key={i} className="abc-entry" style={{marginBottom:i<abcEntries.length-1?10:0}}>
-                    <div className="abc-row"><div className="abc-lbl" style={{color:'var(--faint)'}}>Time</div><div className="abc-val">{e.time}</div></div>
-                    <div className="abc-row abc-a"><div className="abc-lbl">A</div><div className="abc-val">{e.antecedent||'—'}</div></div>
-                    <div className="abc-row abc-b"><div className="abc-lbl">B</div><div className="abc-val">{e.behavior}</div></div>
-                    <div className="abc-row abc-c"><div className="abc-lbl">C</div><div className="abc-val">{e.consequence||'—'}</div></div>
-                  </div>
-                ))}
+            </>
+          ) : (
+            /* SUBMIT VIEW */
+            <div className="submit-view">
+              <div className="submit-view-banner">
+                Session ended
+                <p>Fill in the details below and submit to email the session to the trainer.</p>
               </div>
-            </div>
-          )}
-
-          {/* SESSION NOTE — only shown after End Session */}
-          {sessionPhase==='ended'&&(
-            <div className="sec-card" id="session-note-card">
-              <div className="sec-card-hdr">Session note</div>
-              <div className="sec-card-body">
-                <div className="field" style={{marginBottom:0}}>
-                  <label>Narrative summary *</label>
-                  <textarea rows={6} value={sessionNote}
-                    onChange={e=>{setSessionNote(e.target.value);setErrors(p=>({...p,sessionNote:''}))}}
-                    placeholder="Summarize session activities, client presentation, caregiver communication, and any notable events..."
-                    className={errors.sessionNote?'err':''}/>
-                  {errors.sessionNote&&<div className="field-err">Required</div>}
+              <div className="sec-card">
+                <div className="sec-card-hdr">Trainer info</div>
+                <div className="sec-card-body">
+                  <div className="field" style={{marginBottom:0}}>
+                    <label>Trainer's email *</label>
+                    <input type="email" value={trainerEmail}
+                      onChange={e=>{setTrainerEmail(e.target.value);setErrors(p=>({...p,trainerEmail:''}))}}
+                      placeholder="trainer@magnetaba.com" className={errors.trainerEmail?'err':''}/>
+                    {errors.trainerEmail&&<div className="field-err">Required</div>}
+                  </div>
                 </div>
               </div>
-              <div style={{padding:'0 14px 14px'}}>
-                {sendStatus&&<div className={`status-msg ${sendStatus.ok?'ok':'err'}`} style={{marginBottom:10}}>{sendStatus.msg}</div>}
-                <button className="btn-primary" onClick={handleSubmit} disabled={sending}>
-                  {sending?'Sending…':'Submit & email session'}
-                </button>
+              <div className="sec-card">
+                <div className="sec-card-hdr">Session note</div>
+                <div className="sec-card-body">
+                  <div className="field" style={{marginBottom:0}}>
+                    <label>Narrative summary *</label>
+                    <textarea rows={7} value={sessionNote}
+                      onChange={e=>{setSessionNote(e.target.value);setErrors(p=>({...p,sessionNote:''}))}}
+                      placeholder="Summarize session activities, client presentation, caregiver communication, and any notable events..."
+                      className={errors.sessionNote?'err':''}/>
+                    {errors.sessionNote&&<div className="field-err">Required</div>}
+                  </div>
+                </div>
               </div>
+              {sendStatus&&<div className={`status-msg ${sendStatus.ok?'ok':'err'}`}>{sendStatus.msg}</div>}
+              <button className="btn-primary" onClick={handleSubmit} disabled={sending}>
+                {sending?'Sending…':'Submit & email session'}
+              </button>
             </div>
           )}
         </div>
@@ -468,12 +344,7 @@ export default function App() {
             <div className="rp-sec-title">% Correct — Last {agTrials.length} trials</div>
             {agTrials.length===0
               ? <div style={{fontSize:12,color:'var(--faint)',textAlign:'center',padding:'20px 0'}}>No data to display</div>
-              : <div className="chart-wrap">
-                  <DataChart type="line"
-                    labels={agTrials.map((_,i)=>'T'+(i+1))}
-                    values={cumulativePct(agTrials)}
-                    color="#1d6fc4" yMax={100} yLabel="% correct"/>
-                </div>
+              : <div className="chart-wrap"><DataChart type="line" labels={agTrials.map((_,i)=>'T'+(i+1))} values={cumulativePct(agTrials)} color="#1d6fc4" yMax={100} yLabel="% correct"/></div>
             }
           </div>
           <div className="rp-section">
@@ -486,22 +357,13 @@ export default function App() {
           {intSessions.length>0&&(
             <div className="rp-section">
               <div className="rp-sec-title">Interval % per session</div>
-              <div className="chart-wrap">
-                <DataChart type="line"
-                  labels={intSessions.map((_,i)=>'S'+(i+1))}
-                  values={intSessions.map(s=>Math.round(s.occurred/s.total*1000)/10)}
-                  color="#b3402f" yMax={100}/>
-              </div>
+              <div className="chart-wrap"><DataChart type="line" labels={intSessions.map((_,i)=>'S'+(i+1))} values={intSessions.map(s=>Math.round(s.occurred/s.total*1000)/10)} color="#b3402f" yMax={100}/></div>
             </div>
           )}
           {durEntries.length>0&&(
             <div className="rp-section">
               <div className="rp-sec-title">Duration per occurrence (sec)</div>
-              <div className="chart-wrap">
-                <DataChart type="line"
-                  labels={durEntries.map((_,i)=>'Occ '+(i+1))}
-                  values={durEntries} color="#2f7d4f"/>
-              </div>
+              <div className="chart-wrap"><DataChart type="line" labels={durEntries.map((_,i)=>'Occ '+(i+1))} values={durEntries} color="#2f7d4f"/></div>
             </div>
           )}
         </div>
@@ -509,12 +371,9 @@ export default function App() {
 
       {/* DOCK */}
       <div className="dock">
-        {/* freq bx */}
         <div className={`dock-col${errors.freqName?' err-col':''}`}>
-          <input className={`dock-name-input${errors.freqName?' err':''}`}
-            placeholder="Target behavior"
-            value={freqName}
-            onChange={e=>{setFreqName(e.target.value);setErrors(p=>({...p,freqName:''}))}}/>
+          <input className={`dock-name-input${errors.freqName?' err':''}`} placeholder="Target behavior *"
+            value={freqName} onChange={e=>{setFreqName(e.target.value);setErrors(p=>({...p,freqName:''}))}}/>
           <div className="dock-phase">Baseline</div>
           <div className="dock-controls">
             <button className="dock-stepper" onClick={()=>setFreqCount(c=>Math.max(0,c-1))}>−</button>
@@ -522,19 +381,15 @@ export default function App() {
             <button className="dock-stepper" onClick={()=>setFreqCount(c=>c+1)}>+</button>
           </div>
         </div>
-        {/* dur bx */}
         <div className={`dock-col${errors.durName?' err-col':''}`}>
-          <input className={`dock-name-input${errors.durName?' err':''}`}
-            placeholder="Target behavior"
-            value={durName}
-            onChange={e=>{setDurName(e.target.value);setErrors(p=>({...p,durName:''}))}}/>
+          <input className={`dock-name-input${errors.durName?' err':''}`} placeholder="Target behavior *"
+            value={durName} onChange={e=>{setDurName(e.target.value);setErrors(p=>({...p,durName:''}))}}/>
           <div className="dock-phase">Baseline</div>
           <div className="dock-controls">
             <button className={`dock-play${durRunning?' running':''}`} onClick={toggleDur}>{durRunning?'■':'▶'}</button>
             <div className={`dock-timer${durRunning?' running':''}`}>{fmtMS(durMs)}</div>
           </div>
         </div>
-        {/* ABC corner */}
         <div className="dock-abc-col">
           <button className="dock-abc-btn" onClick={()=>setAbcOpen(true)}>ABC</button>
         </div>
@@ -566,13 +421,11 @@ export default function App() {
         <div className="modal-overlay" onClick={()=>setGraphModalOpen(false)}>
           <div className="modal-box" onClick={e=>e.stopPropagation()}>
             <div className="modal-title">Graph All</div>
-            <div className="modal-note">
-              Please be aware that graphing targets that have no data collected will be graphed as a zero (0).
-            </div>
+            <div className="modal-note">Targets with no data collected will be graphed as a zero (0).</div>
             <div className="modal-btns">
-              <button className="modal-btn-primary" onClick={()=>setGraphModalOpen(false)}>Graph All</button>
-              <button className="modal-btn-primary" onClick={handleEndSession}>Graph All and End Session</button>
-              <button className="modal-btn-close" onClick={()=>setGraphModalOpen(false)}>Close</button>
+              <button className="modal-btn blue" onClick={()=>setGraphModalOpen(false)}>Graph All</button>
+              <button className="modal-btn blue" onClick={handleGraphAllEndSession}>Graph All and End Session</button>
+              <button className="modal-btn close" onClick={()=>setGraphModalOpen(false)}>Close</button>
             </div>
           </div>
         </div>
@@ -586,9 +439,7 @@ function PickList({title,options,value,onPick}){
     <div className="field">
       <label>{title}</label>
       <div className="picklist">
-        {options.map(o=>(
-          <div key={o} className={`pick-item${value===o?' sel':''}`} onClick={()=>onPick(o)}>{o}</div>
-        ))}
+        {options.map(o=><div key={o} className={`pick-item${value===o?' sel':''}`} onClick={()=>onPick(o)}>{o}</div>)}
       </div>
     </div>
   )
