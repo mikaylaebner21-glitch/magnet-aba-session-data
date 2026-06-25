@@ -200,6 +200,8 @@ export default function App() {
     setGraphModalOpen(false)
   }
 
+  const centerRef = useRef(null)
+
   function validate(){
     const e={}
     if(!trainerEmail.trim())  e.trainerEmail='Required'
@@ -209,6 +211,10 @@ export default function App() {
     if(!sessionNote.trim())   e.sessionNote='Required'
     goals.forEach(g=>{ if(!g.name.trim()) e[`g_${g.id}`]='Required' })
     setErrors(e)
+    if(Object.keys(e).length>0){
+      // scroll center panel to top so errors are visible
+      setTimeout(()=>{ if(centerRef.current) centerRef.current.scrollTop=0 },50)
+    }
     return Object.keys(e).length===0
   }
 
@@ -312,7 +318,7 @@ export default function App() {
         </div>
 
         {/* CENTER */}
-        <div className="center">
+        <div className="center" ref={centerRef}>
           <div className="view-label">NET View</div>
 
           {/* trainer email — always visible and editable */}
@@ -504,7 +510,7 @@ export default function App() {
       {/* DOCK */}
       <div className="dock">
         {/* freq bx */}
-        <div className="dock-col">
+        <div className={`dock-col${errors.freqName?' err-col':''}`}>
           <input className={`dock-name-input${errors.freqName?' err':''}`}
             placeholder="Target behavior"
             value={freqName}
@@ -517,7 +523,7 @@ export default function App() {
           </div>
         </div>
         {/* dur bx */}
-        <div className="dock-col">
+        <div className={`dock-col${errors.durName?' err-col':''}`}>
           <input className={`dock-name-input${errors.durName?' err':''}`}
             placeholder="Target behavior"
             value={durName}

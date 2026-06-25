@@ -41,7 +41,7 @@ button:focus-visible, input:focus-visible, textarea:focus-visible { outline: 2px
 .topnav-right strong { display: block; color: #fff; font-size: 12px; }
 
 /* ── 3-col body (fills remaining height) ── */
-.body-wrap { display: flex; flex: 1; overflow: hidden; min-height: 0; }
+.body-wrap { display: flex; flex: 1; overflow: hidden; min-height: 0; height: calc(100vh - var(--topbar-h) - var(--dock-h)); }
 
 /* ── LEFT SIDEBAR ── */
 .sidebar {
@@ -155,7 +155,7 @@ button:focus-visible, input:focus-visible, textarea:focus-visible { outline: 2px
   color: var(--text); flex: 1; min-width: 0;
 }
 .goal-input::placeholder { color: var(--faint); font-weight: 400; }
-.goal-input.err { background: var(--red-dim); border-radius: 4px; padding: 2px 4px; }
+.goal-input.err { background: var(--red-dim); border-radius: 4px; padding: 2px 4px; outline: 1.5px solid var(--red); }
 .phase-tag { font-size: 11px; color: var(--faint); font-weight: 600; white-space: nowrap; margin-left: 10px; }
 .trial-body { padding: 14px; }
 .trial-counter { text-align: center; font-size: 13px; color: var(--soft); margin-bottom: 12px; }
@@ -236,6 +236,7 @@ button:focus-visible, input:focus-visible, textarea:focus-visible { outline: 2px
 }
 .dock-name-input::placeholder { color: var(--faint); font-weight: 400; }
 .dock-name-input.err { color: var(--red); }
+.dock-col.err-col { background: var(--red-dim); border-top: 2px solid var(--red); }
 .dock-phase { font-size: 10px; color: var(--faint); margin-bottom: 4px; }
 .dock-controls { display: flex; align-items: center; gap: 8px; }
 .dock-stepper {
