@@ -30,6 +30,7 @@
   left: 0;
   right: 0;
   display: flex;
+  overflow: hidden;
 }
 
 /* ── Left sidebar ── */
@@ -100,7 +101,7 @@
 /* ── Center ── */
 .center {
   flex: 1;
-  height: 100%;
+  height: 0;
   overflow-y: scroll;
   overflow-x: hidden;
   padding: 14px 16px 24px;
