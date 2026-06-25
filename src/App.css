@@ -24,12 +24,11 @@
 
 /* ── 3-col area (fills between nav and dock) ── */
 .columns {
-  position: absolute;
-  top: 48px;
-  bottom: 72px;
-  left: 0;
-  right: 0;
-  display: flex;
+  display: grid;
+  grid-template-columns: 200px 1fr 300px;
+  overflow: hidden;
+  min-height: 0;
+  height: 100%;
 }
 
 /* ── Left sidebar ── */
@@ -98,7 +97,7 @@
 }
 
 /* ── Center ── */
-.center {
+.center {max-height: 100%;
   flex: 1;
   height: 100%;
   overflow-y: scroll;
