@@ -5,8 +5,8 @@ import { sendToWebhook } from '../webhook'
 const CLIENT = { name: 'Alex Johnson', dob: '03/14/2018', age: '8', gender: 'Male', diagnosis: 'Autism Spectrum Disorder (F84.0)', insurance: 'Blue Cross Blue Shield', id: 'AJ-2018-001', address: '123 Practice Lane, Kansas City, MO' }
 const PROVIDER = { name: 'Mikayla Ebner', credentials: 'BCBA, LBA', npi: '0000000000', org: 'Magnet ABA Therapy', code: '97153', phone: '816.924.3810' }
 
-const SOCIAL_BXS = ['Absence of body language/facial expressions','Failure of back-and-forth communication','Absence of interest in people','Difficulties in initiating, responding to, and maintaining social interactions (Limited social approach)']
-const RESTRICTED_BXS = ['Elopement/Running','Stereotypy','Excessive adherence to routines','Maladaptive transitions','Make stereotypies','Self-injurious behaviors','Adverse responses to specific sounds or textures']
+const SOCIAL_BXS = ['Abnormalities in eye contact and body-language','Failure of back and forth conversation','Difficulties adjusting behavior to suit different social contexts','Absence of interest in people','Difficulties in initiating, responding to, and maintaining social interactions (Abnormal social approach)']
+const RESTRICTED_BXS = ['Echolalia / Scripting','Excessive adherence to routines','Perseverative interests','Motor stereotypies','Unusual interest in sensory aspects of environment','Adverse response to specific sounds or textures']
 const VARIABLES = ['No variables impacted service delivery','Routine or changes to routine','Cultural Factors','Denial or rejection of services by family','Sleep','Lost, misplaced, or lack of materials','Family factors','Financial factors','Treatment infidelity or inconsistency with implementation','Reinforcement of maladaptive behaviors','Hunger','Medications','Environment','Scheduling, availability, or cancellations','Lack of training or support','Comorbid diagnoses or other diagnoses','Stress','Illness or health']
 const ANTECEDENT_INTERVENTIONS = ['Offering choice','FCT','Visual supports','Scheduling transitional activities','Noncontingent reinforcement or attention','Manipulating MO\'s','Priming','Task dispersal','Presence of specific people or stimuli','Modifying instructional delivery','Environmental modifications','Premack Principle (First/Then)','Enriching the environment','Removal of specific people or stimuli','Behavior momentum/ high probability sequences']
 const GENERALIZATION = ['Variation of people','Variation of language or wording','Intermittent or variable schedules of reinforcement','Multiple exemplar training','Requiring varied responses from client','Variation of settings','Variation of time of day','Naturally-occurring reinforcement','Using stimuli within the natural environment or client\'s own stimuli/materials','Formal generalization programs such as R.E.A.L.','Variation of materials or stimuli','Reinforcing untrained or novel behaviors','Running trials with natural stimuli or in the natural setting for the behavior','Maintenance probes']
@@ -49,15 +49,16 @@ function MultiCheck({ options, values, onChange }) {
 
 function RedDropdown({ label, options, value, onChange, multi }) {
   const [open, setOpen] = useState(false)
+  const hasValue = multi ? (value?.length > 0) : !!value
   const display = multi ? (value?.length ? value.join(', ') : label) : (value || label)
   return (
     <span style={{ position:'relative', display:'inline-block' }}>
       <button onClick={()=>setOpen(o=>!o)}
-        style={{ background:'#c0392b', color:'#fff', border:'none', borderRadius:4, padding:'2px 8px', fontSize:12, fontWeight:600, cursor:'pointer', display:'inline-flex', alignItems:'center', gap:4 }}>
-        ⚠ {display} ▾
+        style={{ background: hasValue ? '#e8e8e8' : '#c0392b', color: hasValue ? '#333' : '#fff', border: hasValue ? '1px solid #ccc' : 'none', borderRadius:4, padding:'2px 8px', fontSize:12, fontWeight: hasValue ? 400 : 600, cursor:'pointer', display:'inline-flex', alignItems:'center', gap:4, maxWidth:320 }}>
+        {!hasValue && '⚠ '}{display} ▾
       </button>
       {open && (
-        <div style={{ position:'absolute', top:'100%', left:0, background:'var(--white)', border:'1px solid var(--border)', borderRadius:6, zIndex:100, minWidth:220, boxShadow:'0 4px 12px rgba(0,0,0,0.15)', maxHeight:200, overflowY:'auto' }}>
+        <div style={{ position:'fixed', background:'var(--white)', border:'1px solid var(--border)', borderRadius:6, zIndex:9999, minWidth:260, maxWidth:360, boxShadow:'0 4px 12px rgba(0,0,0,0.2)', maxHeight:220, overflowY:'auto' }}>
           {options.map(o=>(
             <div key={o} onClick={()=>{ if(multi){ onChange(value?.includes(o)?value.filter(v=>v!==o):[...(value||[]),o]) } else { onChange(o); setOpen(false) } }}
               style={{ padding:'8px 12px', fontSize:13, cursor:'pointer', background:(!multi&&value===o)||(multi&&value?.includes(o))?'var(--blue-dim)':'transparent', borderBottom:'1px solid var(--border)' }}>
@@ -187,7 +188,14 @@ function Page1({ form, setForm, sessionMeta, goals }) {
           <div><label style={lbl}>Supervising Provider (BCaBA/RBT):</label><input value={form.supervisorRBT||''} onChange={e=>setForm(p=>({...p,supervisorRBT:e.target.value}))} style={inp}/></div>
         </div>
         <div style={{ marginTop:8 }}>
-          <Checkbox label="Was the Responsible Party Active Participant?" checked={form.parentActive||false} onChange={c=>setForm(p=>({...p,parentActive:c}))}/>
+          <div style={{display:'flex',alignItems:'center',gap:8,fontSize:13}}>
+          <span>Was the Responsible Party an Active Participant?</span>
+          <select value={form.parentActive||''} onChange={e=>setForm(p=>({...p,parentActive:e.target.value}))} style={{background:form.parentActive?'#e8e8e8':'#c0392b',color:form.parentActive?'#333':'#fff',border:'1px solid #ccc',borderRadius:4,padding:'2px 8px',fontSize:12,fontWeight:600}}>
+            <option value="">Select One ▾</option>
+            <option>Yes</option>
+            <option>No</option>
+          </select>
+        </div>
         </div>
       </div>
 
@@ -227,17 +235,33 @@ function Page1({ form, setForm, sessionMeta, goals }) {
 
       {/* Behaviors observed */}
       <div style={{ border:'1px solid #000', padding:10, marginBottom:12 }}>
-        <div style={{ fontWeight:700, fontSize:12, marginBottom:4 }}>Behaviors Observed / Targeted for Today's Session</div>
-        <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:12 }}>
-          <div>
-            <div style={{ fontSize:12, fontWeight:600, color:'var(--soft)', marginBottom:6 }}>Social Communication Deficits Observed / Targeted (choose at least one)</div>
-            <MultiCheck options={SOCIAL_BXS} values={form.socialBxs||[]} onChange={v=>setForm(p=>({...p,socialBxs:v}))}/>
-          </div>
-          <div>
-            <div style={{ fontSize:12, fontWeight:600, color:'var(--soft)', marginBottom:6 }}>Restricted and Repetitive Behaviors Observed / Targeted (choose at least one)</div>
-            <MultiCheck options={RESTRICTED_BXS} values={form.restrictedBxs||[]} onChange={v=>setForm(p=>({...p,restrictedBxs:v}))}/>
-          </div>
-        </div>
+        <div style={{ fontWeight:700, fontSize:12, marginBottom:8 }}>Behaviors Observed / Targeted for Today's Session</div>
+        <table style={{ width:'100%', borderCollapse:'collapse', fontSize:13 }}>
+          <thead>
+            <tr>
+              <th style={{ border:'1px solid #000', padding:'6px 10px', textAlign:'center', fontSize:12, width:'50%' }}>
+                <div style={{fontWeight:700}}>Social Communication Deficits Observed / Targeted</div>
+                <div style={{fontWeight:400,fontStyle:'italic',fontSize:11}}>(choose at least one)</div>
+              </th>
+              <th style={{ border:'1px solid #000', padding:'6px 10px', textAlign:'center', fontSize:12, width:'50%' }}>
+                <div style={{fontWeight:700}}>Restricted and Repetitive Behaviors Observed / Targeted</div>
+                <div style={{fontWeight:400,fontStyle:'italic',fontSize:11}}>(choose at least one)</div>
+              </th>
+            </tr>
+          </thead>
+          <tbody>
+            {Array.from({length:Math.max(SOCIAL_BXS.length,RESTRICTED_BXS.length)},(_,i)=>(
+              <tr key={i}>
+                <td style={{ border:'1px solid #000', padding:'7px 10px' }}>
+                  {SOCIAL_BXS[i] && <Checkbox label={SOCIAL_BXS[i]} checked={(form.socialBxs||[]).includes(SOCIAL_BXS[i])} onChange={c=>setForm(p=>({...p,socialBxs:c?[...(p.socialBxs||[]),SOCIAL_BXS[i]]:(p.socialBxs||[]).filter(v=>v!==SOCIAL_BXS[i])}))}/>}
+                </td>
+                <td style={{ border:'1px solid #000', padding:'7px 10px' }}>
+                  {RESTRICTED_BXS[i] && <Checkbox label={RESTRICTED_BXS[i]} checked={(form.restrictedBxs||[]).includes(RESTRICTED_BXS[i])} onChange={c=>setForm(p=>({...p,restrictedBxs:c?[...(p.restrictedBxs||[]),RESTRICTED_BXS[i]]:(p.restrictedBxs||[]).filter(v=>v!==RESTRICTED_BXS[i])}))}/>}
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
       </div>
     </div>
   )
@@ -398,8 +422,8 @@ function Page3({ form, setForm, sessionData, sessionMeta }) {
       <div style={{ border:'1px solid #000', padding:12, marginBottom:14 }}>
         <div style={{ fontWeight:700, fontSize:13, marginBottom:10 }}>Session Narrative</div>
         <div style={{ fontSize:13, lineHeight:2.2 }}>
-          At the start of session, {CLIENT.name} was <RedDropdown label="Mood/Affect" options={MOOD_OPTIONS} value={form.mood} onChange={v=>setForm(p=>({...p,mood:v}))}/> and <RedDropdown label="Mood/Affect" options={MOOD_OPTIONS} value={form.mood2} onChange={v=>setForm(p=>({...p,mood2:v}))}/>. Response to participants was <RedDropdown label="Response to Participants" options={RESPONSE_TO_PARTICIPANTS} value={form.responseParticipants} onChange={v=>setForm(p=>({...p,responseParticipants:v}))}/>. {CLIENT.name} demonstrated <RedDropdown label="Level of participation" options={LEVEL_OF_PARTICIPATION} value={form.levelParticipation} onChange={v=>setForm(p=>({...p,levelParticipation:v}))}> </RedDropdown> and engaged in <RedDropdown label="What type of interactions occurred?" options={INTERACTION_TYPES} value={form.interactionType} onChange={v=>setForm(p=>({...p,interactionType:v}))}/> interactions for most of session. {CLIENT.name} was given choices and autonomy regarding <RedDropdown label="Choices regarding ___ were given" options={CHOICES_OPTIONS} value={form.choices} onChange={v=>setForm(p=>({...p,choices:v}))}/>.
-          {' '}Focus of session was on increasing <RedDropdown label="We focused on ___ skills" options={SKILL_FOCUS} value={form.skillFocus} onChange={v=>setForm(p=>({...p,skillFocus:v}))}/>  skills. Target behaviors used to build this skill domain included <GoalSelector goals={goals.length?goals:['Goal 1','Goal 2','Goal 3']} value={form.selectedGoals} onChange={v=>setForm(p=>({...p,selectedGoals:v}))}/>.  This skill was taught using a primary intervention of <RedDropdown label="intervention" options={INTERVENTIONS} value={form.intervention} onChange={v=>setForm(p=>({...p,intervention:v}))}/>  and utilizing <RedDropdown label="prompting" options={PROMPTING} value={form.prompting} onChange={v=>setForm(p=>({...p,prompting}))}/>.  In response to the interventions, {CLIENT.name} <RedDropdown label="response" options={RESPONSE_OPTIONS} value={form.response} onChange={v=>setForm(p=>({...p,response:v}))}/>.
+          At the start of session, {CLIENT.name} was <RedDropdown label="Mood/Affect" options={MOOD_OPTIONS} value={form.mood} onChange={v=>setForm(p=>({...p,mood:v}))}/>. Response to participants was <RedDropdown label="Response to Participants" options={RESPONSE_TO_PARTICIPANTS} value={form.responseParticipants} onChange={v=>setForm(p=>({...p,responseParticipants:v}))}/>. {CLIENT.name} demonstrated <RedDropdown label="Level of participation" options={LEVEL_OF_PARTICIPATION} value={form.levelParticipation} onChange={v=>setForm(p=>({...p,levelParticipation:v}))}/> and engaged in <RedDropdown label="What type of interactions occurred?" options={INTERACTION_TYPES} value={form.interactionType} onChange={v=>setForm(p=>({...p,interactionType:v}))}/> interactions for most of session. {CLIENT.name} was given choices and autonomy regarding <RedDropdown label="Choices regarding ___ were given" options={CHOICES_OPTIONS} value={form.choices} onChange={v=>setForm(p=>({...p,choices:v}))}/>.
+          {' '}Focus of session was on increasing <RedDropdown label="We focused on ___ skills" options={SKILL_FOCUS} value={form.skillFocus} onChange={v=>setForm(p=>({...p,skillFocus:v}))}/>  skills. Target behaviors used to build this skill domain included <GoalSelector goals={goals.length?goals:['Goal 1','Goal 2','Goal 3']} value={form.selectedGoals} onChange={v=>setForm(p=>({...p,selectedGoals:v}))}/>. {form.selectedGoals?.length>0 && <span style={{fontStyle:"italic"}}>{form.selectedGoals.join(", ")}</span>}. This skill was taught using a primary intervention of <RedDropdown label="intervention" options={INTERVENTIONS} value={form.intervention} onChange={v=>setForm(p=>({...p,intervention:v}))}/>  and utilizing <RedDropdown label="prompting" options={PROMPTING} value={form.prompting} onChange={v=>setForm(p=>({...p,prompting:v}))}/>.  In response to the interventions, {CLIENT.name} <RedDropdown label="response" options={RESPONSE_OPTIONS} value={form.response} onChange={v=>setForm(p=>({...p,response:v}))}/>.
           {' '}Overall, BT noted <RedDropdown label="Progress in response to specific intervention" options={PROGRESS_OPTIONS} value={form.progress} onChange={v=>setForm(p=>({...p,progress:v}))}/>, as demonstrated by the data and {CLIENT.name}'s response to participants and interventions. Observations of {CLIENT.name}'s symptoms and behaviors confirmed that impairments significantly impact the client's daily functioning and quality of life. These findings underscore the ongoing necessity of ABA therapy to manage these symptoms and enhance the client's overall functioning. Interventions were tailored to {CLIENT.name}'s needs and responses observed indicate a dynamic therapeutic process. Responses to therapy and interventions further substantiate the need for specialized ABA treatment, aiming to alleviate social communication and interaction symptoms such as <RedDropdown label="symptom in patient" options={SOCIAL_SYMPTOMS} value={form.symptom1} onChange={v=>setForm(p=>({...p,symptom1:v}))}/> and restricted and repetitive behavior symptoms such as <RedDropdown label="symptom in patient" options={RESTRICTED_SYMPTOMS} value={form.symptom2} onChange={v=>setForm(p=>({...p,symptom2:v}))}/>. {CLIENT.name}'s progress on specific goals indicates <RedDropdown label="Indicators" options={INDICATORS} value={form.indicators} onChange={v=>setForm(p=>({...p,indicators:v}))}/>. If progress is not observed as anticipated, it implies {CLIENT.name} may require more intensive or sustained treatment to achieve the desired outcomes.
         </div>
       </div>
