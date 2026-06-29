@@ -113,16 +113,10 @@ export default function App({ onComplete }) {
   // graph all modal
   const [graphModalOpen, setGraphModalOpen] = useState(false)
 
-  // view: 'session' | 'submit'
-  const [view, setView] = useState('session')
-  const [sessionNote, setSessionNote] = useState('')
-  const [trainerEmail, setTrainerEmail] = useState('')
   const [errors, setErrors] = useState({})
-  const [sending, setSending] = useState(false)
-  const [sendStatus, setSendStatus] = useState(null)
   const centerRef = useRef(null)
 
-  // validate fields that are required during session (goals + dock)
+  // validate fields required during session
   function validateSession(){
     const e={}
     if(!freqName.trim()) e.freqName='Required'
@@ -136,33 +130,17 @@ export default function App({ onComplete }) {
     return Object.keys(e).length===0
   }
 
-  // validate submit view fields
-  function validateSubmit(){
-    const e={}
-    if(!trainerEmail.trim()) e.trainerEmail='Required'
-    if(!sessionNote.trim())  e.sessionNote='Required'
-    setErrors(e)
-    return Object.keys(e).length===0
-  }
-
   function handleGraphAllEndSession(){
     setGraphModalOpen(false)
-    if(!validateSession()) return  // show red, stay on session view
+    if(!validateSession()) return
     setSessionPhase('ended')
-    setView('submit')
-    setTimeout(()=>{ if(centerRef.current) centerRef.current.scrollTop=0 },50)
-  }
-
-  async function handleSubmit(){
-    if(!validateSubmit()) return
     const data = {
-      trainerEmail,
       sessionDurationSeconds: Math.round(sessionMs/1000),
       submittedAt: new Date().toISOString(),
       goals: goals.map(g=>({name:g.name,phase:g.phase,trials:g.trials})),
       frequencyBehavior: {name:freqName,count:freqCount},
       durationBehavior: {name:durName,entries:durEntries},
-      intervalSessions: intSessions, abcEntries, sessionNote,
+      intervalSessions: intSessions, abcEntries,
     }
     if(onComplete) onComplete(data)
   }
@@ -218,8 +196,7 @@ export default function App({ onComplete }) {
 
         {/* CENTER */}
         <div className="center" ref={centerRef}>
-          {view==='session' ? (
-            <>
+          <>
               <div className="view-label">NET View</div>
               {goals.map(g=>(
                 <div key={g.id} className={`trial-card${g.id===activeId?' selected':''}${errors[`g_${g.id}`]?' err-card':''}`} onClick={()=>setActiveId(g.id)}>
@@ -293,44 +270,6 @@ export default function App({ onComplete }) {
                 </div>
               )}
             </>
-          ) : (
-            /* SUBMIT VIEW */
-            <div className="submit-view">
-              <div className="submit-view-banner">
-                Session ended
-                <p>Fill in the details below and submit to email the session to the trainer.</p>
-              </div>
-              <div className="sec-card">
-                <div className="sec-card-hdr">Trainer info</div>
-                <div className="sec-card-body">
-                  <div className="field" style={{marginBottom:0}}>
-                    <label>Trainer's email *</label>
-                    <input type="email" value={trainerEmail}
-                      onChange={e=>{setTrainerEmail(e.target.value);setErrors(p=>({...p,trainerEmail:''}))}}
-                      placeholder="trainer@magnetaba.com" className={errors.trainerEmail?'err':''}/>
-                    {errors.trainerEmail&&<div className="field-err">Required</div>}
-                  </div>
-                </div>
-              </div>
-              <div className="sec-card">
-                <div className="sec-card-hdr">Session note</div>
-                <div className="sec-card-body">
-                  <div className="field" style={{marginBottom:0}}>
-                    <label>Narrative summary *</label>
-                    <textarea rows={7} value={sessionNote}
-                      onChange={e=>{setSessionNote(e.target.value);setErrors(p=>({...p,sessionNote:''}))}}
-                      placeholder="Summarize session activities, client presentation, caregiver communication, and any notable events..."
-                      className={errors.sessionNote?'err':''}/>
-                    {errors.sessionNote&&<div className="field-err">Required</div>}
-                  </div>
-                </div>
-              </div>
-              {sendStatus&&<div className={`status-msg ${sendStatus.ok?'ok':'err'}`}>{sendStatus.msg}</div>}
-              <button className="btn-primary" onClick={handleSubmit} disabled={sending}>
-                {sending?'Sending…':'Submit & email session'}
-              </button>
-            </div>
-          )}
         </div>
 
         {/* RIGHT PANEL */}
