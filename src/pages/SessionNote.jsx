@@ -49,23 +49,37 @@ function MultiCheck({ options, values, onChange }) {
 
 function RedDropdown({ label, options, value, onChange, multi }) {
   const [open, setOpen] = useState(false)
+  const btnRef = useRef(null)
+  const [dropPos, setDropPos] = useState({top:0,left:0})
   const hasValue = multi ? (value?.length > 0) : !!value
   const display = multi ? (value?.length ? value.join(', ') : label) : (value || label)
+
+  function handleOpen() {
+    if (!open && btnRef.current) {
+      const rect = btnRef.current.getBoundingClientRect()
+      setDropPos({ top: rect.bottom + window.scrollY, left: rect.left + window.scrollX })
+    }
+    setOpen(o => !o)
+  }
+
   return (
     <span style={{ position:'relative', display:'inline-block' }}>
-      <button onClick={()=>setOpen(o=>!o)}
+      <button ref={btnRef} onClick={handleOpen}
         style={{ background: hasValue ? '#e8e8e8' : '#c0392b', color: hasValue ? '#333' : '#fff', border: hasValue ? '1px solid #ccc' : 'none', borderRadius:4, padding:'2px 8px', fontSize:12, fontWeight: hasValue ? 400 : 600, cursor:'pointer', display:'inline-flex', alignItems:'center', gap:4, maxWidth:320 }}>
         {!hasValue && '⚠ '}{display} ▾
       </button>
       {open && (
-        <div style={{ position:'fixed', background:'var(--white)', border:'1px solid var(--border)', borderRadius:6, zIndex:9999, minWidth:260, maxWidth:360, boxShadow:'0 4px 12px rgba(0,0,0,0.2)', maxHeight:220, overflowY:'auto' }}>
-          {options.map(o=>(
-            <div key={o} onClick={()=>{ if(multi){ onChange(value?.includes(o)?value.filter(v=>v!==o):[...(value||[]),o]) } else { onChange(o); setOpen(false) } }}
-              style={{ padding:'8px 12px', fontSize:13, cursor:'pointer', background:(!multi&&value===o)||(multi&&value?.includes(o))?'var(--blue-dim)':'transparent', borderBottom:'1px solid var(--border)' }}>
-              {o}
-            </div>
-          ))}
-        </div>
+        <>
+          <div style={{ position:'fixed', inset:0, zIndex:9998 }} onClick={()=>setOpen(false)}/>
+          <div style={{ position:'absolute', top:'100%', left:0, background:'var(--white)', border:'1px solid var(--border)', borderRadius:6, zIndex:9999, minWidth:220, maxWidth:340, boxShadow:'0 4px 12px rgba(0,0,0,0.2)', maxHeight:200, overflowY:'auto' }}>
+            {options.map(o=>(
+              <div key={o} onClick={()=>{ if(multi){ onChange(value?.includes(o)?value.filter(v=>v!==o):[...(value||[]),o]) } else { onChange(o); setOpen(false) } }}
+                style={{ padding:'8px 12px', fontSize:13, cursor:'pointer', background:(!multi&&value===o)||(multi&&value?.includes(o))?'var(--blue-dim)':'transparent', borderBottom:'1px solid var(--border)' }}>
+                {o}
+              </div>
+            ))}
+          </div>
+        </>
       )}
     </span>
   )
@@ -176,41 +190,83 @@ function Page1({ form, setForm, sessionMeta, goals }) {
       </table>
 
       {/* Individuals present */}
-      <div style={{ border:'1px solid #000', padding:10, marginBottom:12 }}>
-        <div style={{ fontWeight:700, fontSize:12, marginBottom:8 }}>Individuals Present for Session:</div>
-        <div style={{ display:'flex', flexWrap:'wrap', gap:8, marginBottom:8 }}>
-          {['BT/RBT','BCBA','Other','Parent/Responsible Party'].map(o=>(
-            <Checkbox key={o} label={o} checked={form.present?.includes(o)} onChange={c=>setForm(p=>({ ...p, present: c ? [...(p.present||[]),o] : (p.present||[]).filter(v=>v!==o) }))}/>
-          ))}
-        </div>
-        <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:8 }}>
-          <div><label style={lbl}>Supervising Provider (BCBA/BCaBA):</label><input value={form.supervisor||''} onChange={e=>setForm(p=>({...p,supervisor:e.target.value}))} style={inp}/></div>
-          <div><label style={lbl}>Supervising Provider (BCaBA/RBT):</label><input value={form.supervisorRBT||''} onChange={e=>setForm(p=>({...p,supervisorRBT:e.target.value}))} style={inp}/></div>
-        </div>
-        <div style={{ marginTop:8 }}>
-          <div style={{display:'flex',alignItems:'center',gap:8,fontSize:13}}>
-          <span>Was the Responsible Party an Active Participant?</span>
-          <select value={form.parentActive||''} onChange={e=>setForm(p=>({...p,parentActive:e.target.value}))} style={{background:form.parentActive?'#e8e8e8':'#c0392b',color:form.parentActive?'#333':'#fff',border:'1px solid #ccc',borderRadius:4,padding:'2px 8px',fontSize:12,fontWeight:600}}>
-            <option value="">Select One ▾</option>
-            <option>Yes</option>
-            <option>No</option>
-          </select>
-        </div>
-        </div>
+      <div style={{ border:'1px solid #000', padding:0, marginBottom:12 }}>
+        <table style={{ width:'100%', borderCollapse:'collapse', fontSize:13 }}>
+          <tbody>
+            <tr>
+              <td style={{ border:'1px solid #000', padding:'8px 10px', width:'60%' }}>
+                <div style={{ fontWeight:700, fontSize:12, marginBottom:8 }}>Individuals Present for Session:</div>
+                <div style={{ display:'flex', gap:16, marginBottom:10, flexWrap:'wrap' }}>
+                  {['BT/ RBT','Client','Parent/ Responsible Party'].map(o=>(
+                    <label key={o} style={{ display:'flex', alignItems:'center', gap:4, cursor:'pointer', fontSize:13 }}>
+                      <span style={{ background:form.present?.includes(o)?'#c0392b':'transparent', border:'2px solid #c0392b', width:16, height:16, display:'inline-flex', alignItems:'center', justifyContent:'center', borderRadius:2, flexShrink:0 }}
+                        onClick={()=>setForm(p=>({ ...p, present:(p.present||[]).includes(o)?(p.present||[]).filter(v=>v!==o):[...(p.present||[]),o] }))}>
+                        {form.present?.includes(o) && <span style={{color:'#fff',fontSize:10,fontWeight:700}}>▲</span>}
+                      </span>
+                      {o}
+                    </label>
+                  ))}
+                </div>
+                <div style={{ display:'flex', gap:16, marginBottom:8, flexWrap:'wrap' }}>
+                  <Checkbox label="Supervising Provider (BCBA/BCaBA)" checked={form.supBCBA||false} onChange={c=>setForm(p=>({...p,supBCBA:c}))}/>
+                  <Checkbox label="Supervising Provider (Non-BCBA/BCaBA)" checked={form.supNonBCBA||false} onChange={c=>setForm(p=>({...p,supNonBCBA:c}))}/>
+                </div>
+                <div style={{ display:'flex', alignItems:'center', gap:8, marginBottom:10 }}>
+                  <Checkbox label="Other:" checked={form.otherPresent||false} onChange={c=>setForm(p=>({...p,otherPresent:c}))}/>
+                  {form.otherPresent && <input value={form.otherPresentText||''} onChange={e=>setForm(p=>({...p,otherPresentText:e.target.value}))} placeholder="Text box" style={{ padding:'3px 8px', fontSize:12, border:'1px solid var(--border)', borderRadius:4, flex:1 }}/>}
+                </div>
+                <div style={{ fontWeight:700, fontSize:12, marginBottom:6 }}>Was the Responsible Party an Active Participant?:</div>
+                <select value={form.parentActive||''} onChange={e=>setForm(p=>({...p,parentActive:e.target.value}))}
+                  style={{ background:form.parentActive?'#e8e8e8':'#c0392b', color:form.parentActive?'#333':'#fff', border:'none', borderRadius:4, padding:'4px 10px', fontSize:12, fontWeight:600 }}>
+                  <option value="">⚠ Participate with Client during Session? ▾</option>
+                  <option>Yes</option>
+                  <option>No</option>
+                </select>
+              </td>
+              <td style={{ border:'1px solid #000', padding:'8px 10px', verticalAlign:'top', width:'40%' }}>
+                <div style={{ display:'flex', alignItems:'center', gap:8, marginBottom:8 }}>
+                  <span style={{ fontWeight:700, fontSize:12 }}>Location Of Service:</span>
+                  <select value={form.location||''} onChange={e=>setForm(p=>({...p,location:e.target.value}))}
+                    style={{ background:form.location?'#e8e8e8':'#c0392b', color:form.location?'#333':'#fff', border:'none', borderRadius:4, padding:'3px 8px', fontSize:12, fontWeight:600 }}>
+                    <option value="">⚠ Select One ▾</option>
+                    {['Home','Clinic','School','Community','Telehealth','Other'].map(o=><option key={o}>{o}</option>)}
+                  </select>
+                </div>
+                <div style={{ fontSize:12, color:'var(--soft)', marginBottom:4 }}>If other:</div>
+                <textarea rows={2} value={form.locationOther||''} onChange={e=>setForm(p=>({...p,locationOther:e.target.value}))} placeholder="Text area" style={{ width:'100%', padding:'4px 8px', fontSize:12, border:'1px solid var(--border)', borderRadius:4, resize:'none', background:'var(--bg)' }}/>
+              </td>
+            </tr>
+          </tbody>
+        </table>
       </div>
 
-      {/* Responding to supervisor */}
-      <div style={{ border:'2px solid var(--red)', borderRadius:4, padding:10, marginBottom:12 }}>
-        <div style={{ fontWeight:700, fontSize:12, color:' var(--red)', marginBottom:8 }}>Responding Provider On Case:</div>
-        <div><label style={lbl}>Responding Provider Full Name: *</label><input required value={form.respondingProvider||''} onChange={e=>setForm(p=>({...p,respondingProvider:e.target.value}))} style={{...inp, border:'1px solid var(--red)'}}/></div>
-        <div style={{ marginTop:8 }}><Checkbox label="This is the first session with the client" checked={form.firstSession||false} onChange={c=>setForm(p=>({...p,firstSession:c}))}/></div>
-        <div style={{ marginTop:8 }}>
-          <label style={lbl}>Was a Drop Down or Note feedback used?</label>
-          <select value={form.dropDownUsed||''} onChange={e=>setForm(p=>({...p,dropDownUsed:e.target.value}))} style={inp}>
-            <option value="">Select...</option>
-            <option>Yes</option>
-            <option>N/A - Drop Down not available</option>
-          </select>
+      {/* Supervising Provider on Case */}
+      <div style={{ border:'1px solid #000', padding:0, marginBottom:12 }}>
+        <div style={{ fontWeight:700, fontSize:12, padding:'6px 10px', borderBottom:'1px solid #000' }}>Supervising Provider on Case:</div>
+        <div style={{ padding:'8px 10px' }}>
+          <div style={{ background:'#c0392b', color:'#fff', borderRadius:4, padding:'6px 12px', fontSize:13, fontWeight:600, marginBottom:10, display:'flex', alignItems:'center', gap:6 }}>
+            ⚠ <input value={form.respondingProvider||''} onChange={e=>setForm(p=>({...p,respondingProvider:e.target.value}))} placeholder="Supervising Provider Full Name" style={{ background:'transparent', border:'none', color:'#fff', fontSize:13, fontWeight:600, flex:1, outline:'none' }}/>
+            ✏
+          </div>
+          <div style={{ display:'flex', alignItems:'center', gap:10, marginBottom:8 }}>
+            <Checkbox label="This is the first session with the client:" checked={form.firstSession||false} onChange={c=>setForm(p=>({...p,firstSession:c}))}/>
+            <select value={form.firstSessionDD||''} onChange={e=>setForm(p=>({...p,firstSessionDD:e.target.value}))} style={{ border:'1px solid var(--border)', borderRadius:4, padding:'2px 8px', fontSize:12 }}>
+              <option value="">Drop Down</option>
+              <option>Yes</option>
+              <option>No</option>
+            </select>
+          </div>
+          <div style={{ display:'flex', alignItems:'center', gap:8, flexWrap:'wrap' }}>
+            <span style={{ fontSize:13, fontWeight:600 }}>Were you supervised at any point during this session?</span>
+            <select value={form.supervised||''} onChange={e=>setForm(p=>({...p,supervised:e.target.value}))}
+              style={{ background:form.supervised?'#e8e8e8':'#c0392b', color:form.supervised?'#333':'#fff', border:'none', borderRadius:4, padding:'3px 10px', fontSize:12, fontWeight:600 }}>
+              <option value="">⚠ Select One ▾</option>
+              <option>Yes</option>
+              <option>No, I need additional training on:</option>
+              <option>N/A, session was not supervised</option>
+            </select>
+            {form.supervised && <span style={{ fontSize:12, color:'var(--soft)' }}>{form.supervised.startsWith('Yes') ? 'If yes, add the information below.' : 'If no, skip this section.'}</span>}
+          </div>
         </div>
       </div>
 
