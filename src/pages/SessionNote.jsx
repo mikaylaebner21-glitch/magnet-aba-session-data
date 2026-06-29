@@ -245,7 +245,7 @@ function Page1({ form, setForm, sessionMeta, goals }) {
         <div style={{ fontWeight:700, fontSize:12, padding:'6px 10px', borderBottom:'1px solid #000' }}>RBT Shadowed:</div>
         <div style={{ padding:'8px 10px' }}>
           <div style={{ background: form.respondingProvider ? '#e8e8e8' : '#c0392b', color: form.respondingProvider ? '#333' : '#fff', borderRadius:4, padding:'6px 12px', fontSize:13, fontWeight:600, marginBottom:10, display:'flex', alignItems:'center', gap:6 }}>
-            ⚠ <input value={form.respondingProvider||''} onChange={e=>setForm(p=>({...p,respondingProvider:e.target.value}))} placeholder="Name of RBT you shadowed" style={{ background:'transparent', border:'none', color: form.respondingProvider ? '#333' : '#fff', fontSize:13, fontWeight:600, flex:1, outline:'none' }}/>
+            ⚠ <input value={form.respondingProvider||''} onChange={e=>setForm(p=>({...p,respondingProvider:e.target.value}))} placeholder="Name of RBT you shadowed" style={{ background:'transparent', border:'none', color: form.respondingProvider ? '#333' : '#fff', fontSize:13, fontWeight:600, flex:1, outline:'none', '--placeholder-color': form.respondingProvider ? '#999' : 'rgba(255,255,255,0.7)' }} className="rbt-name-input"/>
             ✏
           </div>
           <div style={{ display:'flex', alignItems:'center', gap:10, marginBottom:8 }}>
@@ -647,6 +647,34 @@ export default function SessionNote({ sessionData, quizResults, sessionMeta, onD
   async function handleSubmit() {
     setSending(true)
     try {
+      // flatten quizResults array into individual fields
+      const quizFlat = {}
+      ;(quizResults||[]).forEach((q,i) => {
+        quizFlat[`quiz${i+1}Name`] = q.name || ''
+        quizFlat[`quiz${i+1}DataType`] = q.dataType || ''
+        quizFlat[`quiz${i+1}Correct`] = q.selectedCorrectGraph === true ? 'Yes' : q.selectedCorrectGraph === false ? 'No' : 'Not answered'
+      })
+
+      // flatten multi-select arrays into numbered lists
+      function toList(arr) {
+        if(!arr||!arr.length) return 'None'
+        return arr.map((v,i) => `${i+1}. ${v}`).join('\n')
+      }
+
+      const noteFlat = {
+        ...form,
+        // multi-selects as numbered lists
+        present: toList(form.present),
+        sessionPrep: toList(form.sessionPrep),
+        socialBxs: toList(form.socialBxs),
+        restrictedBxs: toList(form.restrictedBxs),
+        variables: toList(form.variables),
+        antecedentInterventions: toList(form.antecedentInterventions),
+        generalization: toList(form.generalization),
+        reinforcement: toList(form.reinforcement),
+        selectedGoals: toList(form.selectedGoals),
+      }
+
       await sendToWebhook({
         type: 'shadow_session_complete',
         techShadowedEmail: form.techShadowedEmail || '',
@@ -654,7 +682,8 @@ export default function SessionNote({ sessionData, quizResults, sessionMeta, onD
         sessionMeta,
         sessionData,
         quizResults,
-        noteForm: form,
+        ...quizFlat,
+        noteForm: noteFlat,
       })
       setView('billing')
     } catch(err) {

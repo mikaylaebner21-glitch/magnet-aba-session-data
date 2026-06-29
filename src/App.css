@@ -226,3 +226,6 @@
 .modal-btn { border: none; border-radius: 6px; padding: 12px; font-size: 13px; font-weight: 600; cursor: pointer; }
 .modal-btn.blue { background: var(--blue); color: #fff; }
 .modal-btn.close { background: transparent; color: var(--faint); font-size: 13px; }
+
+/* RBT name input placeholder */
+.rbt-name-input::placeholder { color: rgba(255,255,255,0.75); }
