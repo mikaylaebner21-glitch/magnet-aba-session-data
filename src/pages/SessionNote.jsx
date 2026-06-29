@@ -655,10 +655,10 @@ export default function SessionNote({ sessionData, quizResults, sessionMeta, onD
         quizFlat[`quiz${i+1}Correct`] = q.selectedCorrectGraph === true ? 'Yes' : q.selectedCorrectGraph === false ? 'No' : 'Not answered'
       })
 
-      // flatten multi-select arrays into numbered lists
+      // flatten multi-select arrays into comma-separated lists
       function toList(arr) {
-        if(!arr||!arr.length) return 'None'
-        return arr.map((v,i) => `${i+1}. ${v}`).join('\n')
+        if(!arr||!arr.length) return ''
+        return arr.join(', ')
       }
 
       const noteFlat = {
