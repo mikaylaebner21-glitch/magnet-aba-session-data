@@ -90,8 +90,8 @@ function GoalSelector({ goals, value, onChange }) {
   return (
     <span style={{ position:'relative', display:'inline-block' }}>
       <button onClick={()=>setOpen(o=>!o)}
-        style={{ background:'#c0392b', color:'#fff', border:'none', borderRadius:4, padding:'2px 8px', fontSize:12, fontWeight:600, cursor:'pointer' }}>
-        ⚠ Select Goals for Progress Report ▾
+        style={{ background: value?.length>0 ? '#e8e8e8' : '#c0392b', color: value?.length>0 ? '#333' : '#fff', border: value?.length>0 ? '1px solid #ccc' : 'none', borderRadius:4, padding:'2px 8px', fontSize:12, fontWeight: value?.length>0 ? 400 : 600, cursor:'pointer' }}>
+        {!value?.length && '⚠ '}Select Goals for Progress Report ▾
       </button>
       {open && (
         <div style={{ position:'absolute', top:'100%', left:0, background:'var(--white)', border:'1px solid var(--border)', borderRadius:6, zIndex:100, minWidth:260, boxShadow:'0 4px 12px rgba(0,0,0,0.15)' }}>
@@ -242,10 +242,10 @@ function Page1({ form, setForm, sessionMeta, goals }) {
 
       {/* Supervising Provider on Case */}
       <div style={{ border:'1px solid #000', padding:0, marginBottom:12 }}>
-        <div style={{ fontWeight:700, fontSize:12, padding:'6px 10px', borderBottom:'1px solid #000' }}>Supervising Provider on Case:</div>
+        <div style={{ fontWeight:700, fontSize:12, padding:'6px 10px', borderBottom:'1px solid #000' }}>RBT Shadowed:</div>
         <div style={{ padding:'8px 10px' }}>
-          <div style={{ background:'#c0392b', color:'#fff', borderRadius:4, padding:'6px 12px', fontSize:13, fontWeight:600, marginBottom:10, display:'flex', alignItems:'center', gap:6 }}>
-            ⚠ <input value={form.respondingProvider||''} onChange={e=>setForm(p=>({...p,respondingProvider:e.target.value}))} placeholder="Supervising Provider Full Name" style={{ background:'transparent', border:'none', color:'#fff', fontSize:13, fontWeight:600, flex:1, outline:'none' }}/>
+          <div style={{ background: form.respondingProvider ? '#e8e8e8' : '#c0392b', color: form.respondingProvider ? '#333' : '#fff', borderRadius:4, padding:'6px 12px', fontSize:13, fontWeight:600, marginBottom:10, display:'flex', alignItems:'center', gap:6 }}>
+            ⚠ <input value={form.respondingProvider||''} onChange={e=>setForm(p=>({...p,respondingProvider:e.target.value}))} placeholder="Name of RBT you shadowed" style={{ background:'transparent', border:'none', color: form.respondingProvider ? '#333' : '#fff', fontSize:13, fontWeight:600, flex:1, outline:'none' }}/>
             ✏
           </div>
           <div style={{ display:'flex', alignItems:'center', gap:10, marginBottom:8 }}>
@@ -259,8 +259,8 @@ function Page1({ form, setForm, sessionMeta, goals }) {
           <div style={{ display:'flex', alignItems:'center', gap:8, flexWrap:'wrap' }}>
             <span style={{ fontSize:13, fontWeight:600 }}>Were you supervised at any point during this session?</span>
             <select value={form.supervised||''} onChange={e=>setForm(p=>({...p,supervised:e.target.value}))}
-              style={{ background:form.supervised?'#e8e8e8':'#c0392b', color:form.supervised?'#333':'#fff', border:'none', borderRadius:4, padding:'3px 10px', fontSize:12, fontWeight:600 }}>
-              <option value="">⚠ Select One ▾</option>
+              style={{ border:'1px solid var(--border)', borderRadius:4, padding:'3px 10px', fontSize:12, background:'var(--white)' }}>
+              <option value="">Select One</option>
               <option>Yes</option>
               <option>No, I need additional training on:</option>
               <option>N/A, session was not supervised</option>
