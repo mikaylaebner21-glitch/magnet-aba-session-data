@@ -34,7 +34,7 @@ function StackedTimer({ ms, running }) {
   )
 }
 
-export default function App({ onComplete }) {
+export default function App() {
   // session timer
   const [sessionPhase, setSessionPhase] = useState('idle') // idle|running|paused|ended
   const [sessionMs, setSessionMs] = useState(0)
@@ -155,16 +155,20 @@ export default function App({ onComplete }) {
 
   async function handleSubmit(){
     if(!validateSubmit()) return
-    const data = {
-      trainerEmail,
-      sessionDurationSeconds: Math.round(sessionMs/1000),
-      submittedAt: new Date().toISOString(),
-      goals: goals.map(g=>({name:g.name,phase:g.phase,trials:g.trials})),
-      frequencyBehavior: {name:freqName,count:freqCount},
-      durationBehavior: {name:durName,entries:durEntries},
-      intervalSessions: intSessions, abcEntries, sessionNote,
-    }
-    if(onComplete) onComplete(data)
+    setSending(true); setSendStatus(null)
+    try {
+      await sendToWebhook({
+        trainerEmail, sessionDurationSeconds:Math.round(sessionMs/1000),
+        submittedAt:new Date().toISOString(),
+        goals:goals.map(g=>({name:g.name,phase:g.phase,trials:g.trials})),
+        frequencyBehavior:{name:freqName,count:freqCount},
+        durationBehavior:{name:durName,entries:durEntries},
+        intervalSessions, abcEntries, sessionNote,
+      })
+      setSendStatus({ok:true,msg:'Session submitted successfully.'})
+    } catch(err){
+      setSendStatus({ok:false,msg:err.message+' — check webhook is configured.'})
+    } finally { setSending(false) }
   }
 
   const agTrials  = ag?.trials||[]
