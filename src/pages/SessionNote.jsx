@@ -501,9 +501,12 @@ function Page3({ form, setForm, sessionData, sessionMeta }) {
           <input value={form.providerCreds||''} onChange={e=>setForm(p=>({...p,providerCreds:e.target.value}))} placeholder="Provider Credentials" style={inp}/>
         </div>
       </div>
-      <div style={{ border:'1px solid var(--border)', borderRadius:6, padding:12, marginBottom:14 }}>
-        <div style={{ fontWeight:700, fontSize:13, marginBottom:6 }}>Parent/Responsible Party Signature:</div>
-        <SignaturePad value={form.parentSignature||''} onChange={v=>setForm(p=>({...p,parentSignature:v}))}/>
+      <div style={{ border:'1px solid var(--border)', borderRadius:6, padding:12, marginBottom:80 }}>
+        <div style={{ fontWeight:700, fontSize:13, marginBottom:6 }}>Tech shadowed email:</div>
+        <div style={{ fontSize:12, color:'var(--soft)', marginBottom:8 }}>Enter the email of the technician you shadowed — the completed note will be sent to them.</div>
+        <input type="email" value={form.techShadowedEmail||''} onChange={e=>setForm(p=>({...p,techShadowedEmail:e.target.value}))}
+          placeholder="tech@magnetaba.com"
+          style={{ width:'100%', padding:'10px 12px', fontSize:14, border:'1px solid var(--border)', borderRadius:6 }}/>
       </div>
 
       {/* Session data popup */}
@@ -550,12 +553,95 @@ const tdS = { border:'1px solid #000', padding:'5px 8px', fontSize:12 }
 const lbl = { fontSize:12, fontWeight:600, color:'var(--soft)', display:'block', marginBottom:3 }
 const inp = { width:'100%', padding:'6px 8px', fontSize:13, border:'1px solid var(--border)', borderRadius:4 }
 
+// ── Billing Page ──
+function BillingPage({ onDone, sessionMeta }) {
+  const [submitted, setSubmitted] = useState(false)
+
+  if(submitted) return (
+    <div style={{ display:'flex', flexDirection:'column', alignItems:'center', justifyContent:'center', height:'100vh', gap:16 }}>
+      <div style={{ fontSize:48 }}>✅</div>
+      <div style={{ fontSize:22, fontWeight:700 }}>Submitted!</div>
+      <div style={{ fontSize:14, color:'var(--soft)', textAlign:'center', maxWidth:320 }}>Your shadow session note and billing timesheet have been submitted.</div>
+    </div>
+  )
+
+  return (
+    <div style={{ display:'grid', gridTemplateRows:'48px 1fr', height:'100vh', overflow:'hidden' }}>
+      <div style={{ background:'var(--navy)', display:'flex', alignItems:'center', justifyContent:'space-between', padding:'0 20px' }}>
+        <div style={{ color:'#fff', fontWeight:800, fontSize:16 }}><span style={{ color:'#6ea8e8' }}>Magnet</span> ABA</div>
+        <div style={{ color:'#cfe0f5', fontSize:12 }}>Billing — Edit Timesheet</div>
+        <div/>
+      </div>
+      <div style={{ overflowY:'auto', background:'var(--bg)', padding:'0 0 40px' }}>
+        {/* CR billing header */}
+        <div style={{ background:'var(--white)', borderBottom:'1px solid var(--border)', padding:'8px 20px', display:'flex', alignItems:'center', gap:16 }}>
+          <div style={{ fontSize:13, fontWeight:700, color:'var(--navy)' }}>Edit Timesheet</div>
+          <div style={{ fontSize:12, color:'var(--soft)' }}>#{Math.floor(Math.random()*90000+10000)}-{Math.floor(Math.random()*90000+10000)}-{Math.floor(Math.random()*90000+10000)}</div>
+        </div>
+        <div style={{ padding:'20px', maxWidth:900, margin:'0 auto' }}>
+          <div style={{ background:'var(--white)', border:'1px solid var(--border)', borderRadius:8, padding:20, marginBottom:16 }}>
+            {[
+              ['Provider', 'Mikayla Ebner'],
+              ['Place of Service', '12 - Home'],
+              ['Authorization', 'BC Blue Cross Blue Shield ✏'],
+              ['Modifier', ''],
+              ['From Date', sessionMeta?.sessionDate || ''],
+              ['To Date', sessionMeta?.sessionDate || ''],
+              ['Procedure', '97153 ▾', ''],
+              ['Time from', sessionMeta?.sessionStart || '', 'Time to', sessionMeta?.sessionEnd || ''],
+              ['Diagnosis', 'F84.0 - Autism'],
+              ['Service Units', ''],
+              ['Provider Pay', ''],
+              ['Admin Notes', ''],
+            ].map(([label, val, label2, val2], i) => (
+              <div key={i} style={{ display:'grid', gridTemplateColumns: label2 ? '120px 1fr 120px 1fr' : '120px 1fr', gap:8, marginBottom:10, alignItems:'center' }}>
+                <label style={{ fontSize:12, fontWeight:600, color:'var(--soft)', textAlign:'right', paddingRight:8 }}>{label}</label>
+                <input value={val||''} readOnly style={{ padding:'6px 10px', fontSize:13, border:'1px solid var(--border)', borderRadius:4, background:val?'var(--white)':'var(--bg)' }}/>
+                {label2 && <label style={{ fontSize:12, fontWeight:600, color:'var(--soft)', textAlign:'right', paddingRight:8 }}>{label2}</label>}
+                {val2 !== undefined && <input value={val2||''} readOnly style={{ padding:'6px 10px', fontSize:13, border:'1px solid var(--border)', borderRadius:4, background:val2?'var(--white)':'var(--bg)' }}/>}
+              </div>
+            ))}
+          </div>
+
+          {/* Files / Notes / Signatures row */}
+          <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr 1fr', gap:16, marginBottom:16 }}>
+            <div style={{ background:'var(--white)', border:'1px solid var(--border)', borderRadius:8, padding:16, textAlign:'center' }}>
+              <div style={{ fontSize:10, fontWeight:700, color:'var(--faint)', textTransform:'uppercase', marginBottom:10 }}>Files</div>
+              <button style={{ width:'100%', background:'transparent', border:'1px solid var(--teal)', color:'var(--teal)', borderRadius:4, padding:'8px', fontSize:12, fontWeight:700 }}>ATTACH FILE(S)</button>
+            </div>
+            <div style={{ background:'var(--white)', border:'1px solid var(--border)', borderRadius:8, padding:16, textAlign:'center' }}>
+              <div style={{ fontSize:10, fontWeight:700, color:'var(--faint)', textTransform:'uppercase', marginBottom:4 }}>(97153) DIRECT SERV (2/3)</div>
+              <div style={{ fontSize:10, color:'var(--faint)', marginBottom:8 }}>At least one required</div>
+              <div style={{ background:'var(--blue)', color:'#fff', borderRadius:4, padding:'8px', fontSize:12, fontWeight:700, marginBottom:6 }}>NEW NOTE ✓</div>
+              <button style={{ width:'100%', background:'transparent', border:'1px solid var(--border)', borderRadius:4, padding:'6px', fontSize:12 }}>SELECT EXISTING NOTE</button>
+            </div>
+            <div style={{ background:'var(--white)', border:'1px solid var(--border)', borderRadius:8, padding:16, textAlign:'center' }}>
+              <div style={{ fontSize:10, fontWeight:700, color:'var(--faint)', textTransform:'uppercase', marginBottom:10 }}>Signatures</div>
+              <button style={{ width:'100%', background:'transparent', border:'1px dashed var(--teal)', color:'var(--teal)', borderRadius:4, padding:'8px', fontSize:12, fontWeight:700, marginBottom:6 }}>CLIENT SIGNATURE</button>
+              <button style={{ width:'100%', background:'transparent', border:'1px dashed var(--teal)', color:'var(--teal)', borderRadius:4, padding:'8px', fontSize:12, fontWeight:700 }}>PROVIDER SIGNATURE</button>
+            </div>
+          </div>
+
+          {/* Cancel / Submit */}
+          <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center' }}>
+            <button style={{ background:'transparent', border:'none', fontSize:13, color:'var(--soft)', cursor:'pointer' }}>CANCEL</button>
+            <button onClick={()=>setSubmitted(true)}
+              style={{ background:'var(--blue)', color:'#fff', border:'none', borderRadius:6, padding:'10px 32px', fontSize:14, fontWeight:700, cursor:'pointer' }}>
+              SUBMIT
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  )
+}
+
 // ── Main SessionNote wrapper ──
 export default function SessionNote({ sessionData, quizResults, sessionMeta, onDone }) {
   const [page, setPage] = useState(1)
   const [form, setForm] = useState({})
   const [sending, setSending] = useState(false)
-  const [sent, setSent] = useState(false)
+  const [view, setView] = useState('note') // note | billing | done
   const goals = sessionData.goals?.map(g=>g.name).filter(Boolean) || []
 
   async function handleSubmit() {
@@ -563,31 +649,32 @@ export default function SessionNote({ sessionData, quizResults, sessionMeta, onD
     try {
       await sendToWebhook({
         type: 'shadow_session_complete',
-        trainerEmail: sessionData.trainerEmail,
+        techShadowedEmail: form.techShadowedEmail || '',
         submittedAt: new Date().toISOString(),
         sessionMeta,
         sessionData,
         quizResults,
         noteForm: form,
       })
-      setSent(true)
+      setView('billing')
     } catch(err) {
       alert('Submit error: ' + err.message)
     } finally { setSending(false) }
   }
 
-  if(sent) return (
+  if(view === 'billing') return <BillingPage onDone={()=>setView('done')} sessionMeta={sessionMeta}/>
+  if(view === 'done') return (
     <div style={{ display:'flex', flexDirection:'column', alignItems:'center', justifyContent:'center', height:'100vh', gap:16 }}>
       <div style={{ fontSize:48 }}>✅</div>
-      <div style={{ fontSize:22, fontWeight:700 }}>Session submitted!</div>
-      <div style={{ fontSize:14, color:'var(--soft)' }}>The note and session data have been emailed to the trainer.</div>
+      <div style={{ fontSize:22, fontWeight:700 }}>Session complete!</div>
+      <div style={{ fontSize:14, color:'var(--soft)' }}>The note and session data have been emailed to the tech you shadowed.</div>
     </div>
   )
 
   const titles = { 1:'Client Information & Session Details', 2:'Variables, Interventions & Reinforcement', 3:'Session Content, Narrative & Signature' }
 
   return (
-    <div style={{ display:'grid', gridTemplateRows:'48px 1fr', height:'100vh', overflow:'hidden' }}>
+    <div style={{ display:'grid', gridTemplateRows:'48px 1fr 52px', height:'100vh', overflow:'hidden' }}>
       {/* Nav */}
       <div style={{ background:'var(--navy)', display:'flex', alignItems:'center', justifyContent:'space-between', padding:'0 20px' }}>
         <div style={{ color:'#fff', fontWeight:800, fontSize:16 }}><span style={{ color:'#6ea8e8' }}>Magnet</span> ABA</div>
@@ -595,13 +682,10 @@ export default function SessionNote({ sessionData, quizResults, sessionMeta, onD
         <div style={{ display:'flex', gap:8 }}>
           {page > 1 && <button onClick={()=>setPage(p=>p-1)} style={{ background:'transparent', color:'#fff', border:'1px solid rgba(255,255,255,0.3)', borderRadius:6, padding:'6px 14px', fontSize:13, fontWeight:600 }}>← Previous</button>}
           {page < 3 && <button onClick={()=>setPage(p=>p+1)} style={{ background:'var(--blue)', color:'#fff', border:'none', borderRadius:6, padding:'6px 14px', fontSize:13, fontWeight:700 }}>Next →</button>}
-          {page === 3 && <button onClick={handleSubmit} disabled={sending} style={{ background:'#2f7d4f', color:'#fff', border:'none', borderRadius:6, padding:'6px 14px', fontSize:13, fontWeight:700 }}>
-            {sending ? 'Submitting…' : 'Save & Close'}
-          </button>}
         </div>
       </div>
 
-      {/* Section label */}
+      {/* Section label + content */}
       <div style={{ overflowY:'auto' }}>
         <div style={{ background:'var(--white)', borderBottom:'1px solid var(--border)', padding:'10px 20px', textAlign:'center' }}>
           <div style={{ fontSize:11, color:'var(--faint)' }}>Currently Editing Section:</div>
@@ -611,6 +695,18 @@ export default function SessionNote({ sessionData, quizResults, sessionMeta, onD
           {page===1 && <Page1 form={form} setForm={setForm} sessionMeta={sessionMeta} goals={goals}/>}
           {page===2 && <Page2 form={form} setForm={setForm}/>}
           {page===3 && <Page3 form={form} setForm={setForm} sessionData={sessionData} sessionMeta={sessionMeta}/>}
+        </div>
+      </div>
+
+      {/* Bottom bar — CR style Save & Close */}
+      <div style={{ background:'var(--white)', borderTop:'1px solid var(--border)', display:'flex', alignItems:'center', justifyContent:'space-between', padding:'0 20px' }}>
+        <button onClick={()=>setPage(p=>Math.max(1,p-1))} style={{ background:'transparent', border:'none', color:'var(--teal)', fontSize:13, fontWeight:700, cursor:'pointer' }}>CLOSE</button>
+        <div style={{ display:'flex', gap:8 }}>
+          <button style={{ background:'transparent', border:'none', color:'var(--soft)', fontSize:13, fontWeight:600, cursor:'pointer' }}>SAVE</button>
+          <button onClick={handleSubmit} disabled={sending}
+            style={{ background:'var(--blue)', color:'#fff', border:'none', borderRadius:4, padding:'8px 20px', fontSize:13, fontWeight:700, cursor:'pointer' }}>
+            {sending ? 'Saving…' : 'SAVE & CLOSE'}
+          </button>
         </div>
       </div>
     </div>
