@@ -163,7 +163,7 @@ export default function App() {
         goals:goals.map(g=>({name:g.name,phase:g.phase,trials:g.trials})),
         frequencyBehavior:{name:freqName,count:freqCount},
         durationBehavior:{name:durName,entries:durEntries},
-        intervalSessions: intSessions, abcEntries, sessionNote,
+        intervalSessions, abcEntries, sessionNote,
       })
       setSendStatus({ok:true,msg:'Session submitted successfully.'})
     } catch(err){
