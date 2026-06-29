@@ -1,0 +1,122 @@
+.dock {
+  position: sticky;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  background: var(--paper);
+  border-top: 1px solid var(--line);
+  display: flex;
+  align-items: stretch;
+  margin: 16px -16px -48px;
+  padding: 10px 0;
+}
+
+.dock-item {
+  flex: 1;
+  padding: 0 16px;
+  border-right: 1px solid var(--line);
+}
+
+.dock-label-input {
+  width: 100%;
+  border: none;
+  background: transparent;
+  font-size: 12.5px;
+  font-weight: 700;
+  color: var(--ink);
+  padding: 0;
+  margin-bottom: 2px;
+}
+
+.dock-label-input::placeholder {
+  color: var(--ink-faint);
+  font-weight: 600;
+}
+
+.dock-phase {
+  font-size: 10px;
+  color: var(--ink-faint);
+  margin-bottom: 6px;
+}
+
+.dock-controls {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.dock-btn {
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  border: 1px solid var(--line);
+  background: var(--paper-dim);
+  font-size: 15px;
+  font-weight: 700;
+  cursor: pointer;
+  color: var(--ink);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+}
+
+.dock-count {
+  font-size: 16px;
+  font-weight: 700;
+  min-width: 20px;
+  text-align: center;
+}
+
+.dock-timer {
+  font-size: 16px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  color: var(--ink-faint);
+  min-width: 48px;
+}
+
+.dock-timer.running {
+  color: var(--green);
+}
+
+.dock-play-btn {
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  border: 1px solid var(--line);
+  background: var(--paper-dim);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  padding: 0;
+  color: var(--ink-soft);
+  font-size: 12px;
+}
+
+.dock-play-btn.running {
+  background: var(--red);
+  border-color: var(--red);
+  color: #fff;
+}
+
+.dock-abc-corner {
+  flex: 0 0 auto;
+  width: 56px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-left: 1px solid var(--line);
+}
+
+.dock-abc-btn {
+  border: none;
+  background: transparent;
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--blue);
+  cursor: pointer;
+  letter-spacing: 0.02em;
+  padding: 8px 4px;
+}
