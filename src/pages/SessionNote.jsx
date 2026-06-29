@@ -554,7 +554,7 @@ const lbl = { fontSize:12, fontWeight:600, color:'var(--soft)', display:'block',
 const inp = { width:'100%', padding:'6px 8px', fontSize:13, border:'1px solid var(--border)', borderRadius:4 }
 
 // ── Billing Page ──
-function BillingPage({ onDone, sessionMeta }) {
+function BillingPage({ onDone, onEditNote, sessionMeta }) {
   const [submitted, setSubmitted] = useState(false)
 
   if(submitted) return (
@@ -612,7 +612,7 @@ function BillingPage({ onDone, sessionMeta }) {
             <div style={{ background:'var(--white)', border:'1px solid var(--border)', borderRadius:8, padding:16, textAlign:'center' }}>
               <div style={{ fontSize:10, fontWeight:700, color:'var(--faint)', textTransform:'uppercase', marginBottom:4 }}>(97153) DIRECT SERV (2/3)</div>
               <div style={{ fontSize:10, color:'var(--faint)', marginBottom:8 }}>At least one required</div>
-              <div style={{ background:'var(--blue)', color:'#fff', borderRadius:4, padding:'8px', fontSize:12, fontWeight:700, marginBottom:6 }}>NEW NOTE ✓</div>
+              <button onClick={onEditNote} style={{ width:'100%', background:'var(--blue)', color:'#fff', border:'none', borderRadius:4, padding:'8px', fontSize:12, fontWeight:700, marginBottom:6, cursor:'pointer' }}>NEW NOTE ✓</button>
               <button style={{ width:'100%', background:'transparent', border:'1px solid var(--border)', borderRadius:4, padding:'6px', fontSize:12 }}>SELECT EXISTING NOTE</button>
             </div>
             <div style={{ background:'var(--white)', border:'1px solid var(--border)', borderRadius:8, padding:16, textAlign:'center' }}>
@@ -662,7 +662,7 @@ export default function SessionNote({ sessionData, quizResults, sessionMeta, onD
     } finally { setSending(false) }
   }
 
-  if(view === 'billing') return <BillingPage onDone={()=>setView('done')} sessionMeta={sessionMeta}/>
+  if(view === 'billing') return <BillingPage onDone={()=>setView('done')} onEditNote={()=>setView('note')} sessionMeta={sessionMeta}/>
   if(view === 'done') return (
     <div style={{ display:'flex', flexDirection:'column', alignItems:'center', justifyContent:'center', height:'100vh', gap:16 }}>
       <div style={{ fontSize:48 }}>✅</div>
@@ -703,8 +703,9 @@ export default function SessionNote({ sessionData, quizResults, sessionMeta, onD
         <button onClick={()=>setPage(p=>Math.max(1,p-1))} style={{ background:'transparent', border:'none', color:'var(--teal)', fontSize:13, fontWeight:700, cursor:'pointer' }}>CLOSE</button>
         <div style={{ display:'flex', gap:8 }}>
           <button style={{ background:'transparent', border:'none', color:'var(--soft)', fontSize:13, fontWeight:600, cursor:'pointer' }}>SAVE</button>
-          <button onClick={handleSubmit} disabled={sending}
-            style={{ background:'var(--blue)', color:'#fff', border:'none', borderRadius:4, padding:'8px 20px', fontSize:13, fontWeight:700, cursor:'pointer' }}>
+          <button onClick={handleSubmit} disabled={sending || page < 3}
+            style={{ background: page < 3 ? '#aac4e8' : 'var(--blue)', color:'#fff', border:'none', borderRadius:4, padding:'8px 20px', fontSize:13, fontWeight:700, cursor: page < 3 ? 'not-allowed' : 'pointer' }}
+            title={page < 3 ? 'Complete all sections before saving' : ''}>
             {sending ? 'Saving…' : 'SAVE & CLOSE'}
           </button>
         </div>
