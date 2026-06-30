@@ -652,7 +652,7 @@ export default function SessionNote({ sessionData, quizResults, sessionMeta, onD
       ;(quizResults||[]).forEach((q,i) => {
         quizFlat[`quiz${i+1}Name`] = q.name || ''
         quizFlat[`quiz${i+1}DataType`] = q.dataType || ''
-        quizFlat[`quiz${i+1}Correct`] = q.selectedCorrectGraph === true ? 'Yes' : q.selectedCorrectGraph === false ? 'No' : 'Not answered'
+        quizFlat[`quiz${i+1}Correct`] = q.selectedCorrectGraph === true ? 1 : q.selectedCorrectGraph === false ? 0 : ''
       })
 
       // flatten multi-select arrays into comma-separated lists
