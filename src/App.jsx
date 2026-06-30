@@ -101,7 +101,7 @@ export default function App({ onComplete }) {
   const [intSessions, setIntSessions] = useState([])
   function rebuildGrid(n){ setNumInt(n); setIntMarks(Array(n).fill(false)) }
   function toggleMark(i){ setIntMarks(p=>p.map((v,idx)=>idx===i?!v:v)) }
-  function logIntSession(){ const o=intMarks.filter(Boolean).length; setIntSessions(p=>[...p,{behavior:intBxName||'Untitled',method:intMethod,occurred:o,total:intMarks.length}]); setIntMarks(Array(numInt).fill(false)) }
+  function logIntSession(){ const o=intMarks.filter(Boolean).length; setIntSessions(p=>[...p,{behavior:intBxName||'Untitled',method:intMethod,occurred:o,total:intMarks.length}]); setIntMarks(Array(numInt).fill(false)); setErrors(p=>({...p,intervalUnlogged:''})) }
 
   // ABC
   const [abcOpen, setAbcOpen] = useState(false)
@@ -123,6 +123,11 @@ export default function App({ onComplete }) {
     if(!durName.trim())  e.durName='Required'
     if(!intBxName.trim()) e.intBxName='Required'
     goals.forEach(g=>{ if(!g.name.trim()) e[`g_${g.id}`]='Required' })
+    // if intervals are marked on the grid but never logged, block submission
+    const hasUnloggedMarks = intMarks.some(Boolean)
+    if(hasUnloggedMarks){
+      e.intervalUnlogged = 'You have marked intervals that haven\'t been logged yet. Click "Log interval session" before ending the session.'
+    }
     setErrors(e)
     if(Object.keys(e).length>0){
       setTimeout(()=>{ if(centerRef.current) centerRef.current.scrollTop=0 },50)
@@ -257,6 +262,7 @@ export default function App({ onComplete }) {
                     {intMarks.map((v,i)=><button key={i} className={`int-cell${v?' marked':''}`} onClick={()=>toggleMark(i)}>{i+1}</button>)}
                   </div>
                   <button className="btn-primary" onClick={logIntSession}>Log interval session</button>
+                  {errors.intervalUnlogged&&<div className="field-err" style={{marginTop:8}}>{errors.intervalUnlogged}</div>}
                   {intSessions.length>0&&(
                     <div className="entry-list" style={{marginTop:12}}>
                       {intSessions.map((s,i)=>(
